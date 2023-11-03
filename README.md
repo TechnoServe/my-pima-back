@@ -14,8 +14,10 @@ The API to serve TechnoServe Coffee Program web app called "My PIMA"
   - [Getting Started](#getting-started)
     - [Prerequisites](#prerequisites)
     - [Installation](#installation)
+    - [**How to migrate postgres db**](#how-to-migrate-postgres-db)
   - [Usage](#usage)
   - [API Documentation](#api-documentation)
+  - [Run pre-required endpoints](#run-pre-required-endpoints)
 
 ## Getting Started
 
@@ -35,6 +37,24 @@ Provide step-by-step installation instructions. For example:
 3. Install dependencies: `npm install`
 4. Configure the environment variables from .env.example (if applicable).
 
+### **How to migrate postgres db**
+
+- **Install sequelize-cli globally**
+
+      npm install -g sequelize-cli
+
+- **Generate migration file**
+
+      sequelize migration:generate --name migration-name
+
+- **Run migration**
+
+      sequelize db:migrate
+
+- **Undo migration**
+
+      sequelize db:migrate:undo --name migration-name
+
 ## Usage
 
 Use apollo studio to test the API
@@ -43,23 +63,55 @@ Use apollo studio to test the API
 
 Apollo Studio: [PIMA API documentation] (<https://studio.apollographql.com/sandbox/explorer?endpoint=https://api.pima.ink/graphql>)
 
-```javascript
-// Sample GraphQL query using Apollo Client
-import { ApolloClient, InMemoryCache, gql } from "@apollo/client";
+## Run pre-required endpoints
+
+- **load salesforce users**
+
+-```javascript
+query LoadSFUsers {
+loadSFUsers {
+message
+status
+total_new_users
+}
+}
+
+- **load salesforce projects**
+
+  -```javascript
+  query LoadProjects {
+  loadProjects {
+  message
+  status
+  total_new_projects
+  }
+  }
+
+- **load salesforce projects roles**
+
+  -```javascript
+  query LoadProjectRoles {
+  loadProjectRoles {
+  message
+  status
+  total_loaded
+  }
+  }
+
+  -```javascript
+  // Sample GraphQL query using Apollo Client
+  import { ApolloClient, InMemoryCache, gql } from "@apollo/client";
 
 const client = new ApolloClient({
-  uri: "https://api.pima.ink/graphql",
-  cache: new InMemoryCache(),
+uri: "<https://api.pima.ink/graphql>",
+cache: new InMemoryCache(),
 });
 
 client
-  .query({
-    query: gql`
-            query {
+.query({
+query: gql`query {
             // Your GraphQL query here
-            }
-        `,
-  })
-  .then((result) => console.log(result))
-  .catch((error) => console.error(error));
-```
+            }`,
+})
+.then((result) => console.log(result))
+.catch((error) => console.error(error));
