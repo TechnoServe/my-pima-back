@@ -63,42 +63,7 @@ Use apollo studio to test the API
 
 Apollo Studio: [PIMA API documentation] (<https://studio.apollographql.com/sandbox/explorer?endpoint=https://api.pima.ink/graphql>)
 
-## Run pre-required endpoints
-
-- **load salesforce users**
-
--```javascript
-query LoadSFUsers {
-loadSFUsers {
-message
-status
-total_new_users
-}
-}
-
-- **load salesforce projects**
-
-  -```javascript
-  query LoadProjects {
-  loadProjects {
-  message
-  status
-  total_new_projects
-  }
-  }
-
-- **load salesforce projects roles**
-
-  -```javascript
-  query LoadProjectRoles {
-  loadProjectRoles {
-  message
-  status
-  total_loaded
-  }
-  }
-
-  -```javascript
+```javascript
   // Sample GraphQL query using Apollo Client
   import { ApolloClient, InMemoryCache, gql } from "@apollo/client";
 
@@ -115,3 +80,39 @@ query: gql`query {
 })
 .then((result) => console.log(result))
 .catch((error) => console.error(error));
+```
+
+## Run pre-required endpoints
+
+- **load salesforce users**
+```javascript
+query LoadSFUsers {
+  loadSFUsers {
+    message
+    status
+    total_new_users
+  }
+}
+```
+
+- **load salesforce projects**
+```javascript
+query LoadProjects {
+  loadProjects {
+    message
+    status
+    total_new_projects
+  }
+}
+```
+
+- **load salesforce projects roles**
+```javascript
+query LoadProjectRoles {
+  loadProjectRoles {
+    message
+    status
+    total_loaded
+  }
+}
+```
