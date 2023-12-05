@@ -22,7 +22,7 @@ const ParticipantsResolvers = {
         let participants = [];
 
         // Perform the initial query
-        const result = await sf_conn.query(
+        let result = await sf_conn.query(
           "SELECT Id, Participant_Full_Name__c, Gender__c, Training_Group__r.Project_Location__c, TNS_Id__c, Status__c, Trainer_Name__c, Project__c, Training_Group__c, Training_Group__r.Responsible_Staff__r.ReportsToId, Household__c, Primary_Household_Member__c FROM Participant__c WHERE Project__c = '" +
             project.project_name +
             "'"
