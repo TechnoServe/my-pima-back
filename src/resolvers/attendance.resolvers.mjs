@@ -3,7 +3,7 @@ const AttendanceResolvers = {
     getAttendances: async (_, { project_id }, { sf_conn }) => {
       try {
         const attendance = await sf_conn.query(
-          "SELECT Id, Name, Participant__c, Participant_Gender__c, Attended__c, Training_Session__c, Date__c FROM Attendance__c WHERE Training_Session__r.Training_Group__r.Project__c = '" + project_id+ "'"
+          "SELECT Id, Name, Participant__c, Participant_Gender__c, Attended__c, Training_Session__c, Date__c, Training_Session__r.Training_Module__r.Module_Title__c, Training_Session__r.Training_Module__r.Module_Number__c FROM Attendance__c WHERE Training_Session__r.Training_Group__r.Project__c = '" + project_id+ "'"
         );
 
         if (attendance.totalSize === 0) {
@@ -25,6 +25,8 @@ const AttendanceResolvers = {
               attendance_status:
                 attendance.Attended__c === 1 ? "Present" : "Absent",
               session_id: attendance.Training_Session__c,
+              module_name: attendance.Training_Session__r.Training_Module__r.Module_Title__c,
+              module_number: attendance.Training_Session__r.Training_Module__r.Module_Number__c
             };
           }),
         };
