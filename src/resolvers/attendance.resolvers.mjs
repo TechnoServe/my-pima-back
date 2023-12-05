@@ -1,9 +1,9 @@
 const AttendanceResolvers = {
   Query: {
-    getAttendances: async (_, __, { sf_conn }) => {
+    getAttendances: async (_, { project_id }, { sf_conn }) => {
       try {
         const attendance = await sf_conn.query(
-          "SELECT Id, Name, Participant__c, Participant_Gender__c, Attended__c, Training_Session__c, Date__c FROM Attendance__c"
+          "SELECT Id, Name, Participant__c, Participant_Gender__c, Attended__c, Training_Session__c, Date__c FROM Attendance__c WHERE Training_Session__r.Training_Group__r.Project__c = '" + project_id+ "'"
         );
 
         if (attendance.totalSize === 0) {
