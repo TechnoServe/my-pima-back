@@ -19,11 +19,23 @@ const ParticipantsResolvers = {
           };
         }
 
-        const participants = await sf_conn.query(
+        let participants = [];
+
+        // Perform the initial query
+        const result = await sf_conn.query(
           "SELECT Id, Participant_Full_Name__c, Gender__c, Training_Group__r.Project_Location__c, TNS_Id__c, Status__c, Trainer_Name__c, Project__c, Training_Group__c, Training_Group__r.Responsible_Staff__r.ReportsToId, Household__c, Primary_Household_Member__c FROM Participant__c WHERE Project__c = '" +
             project.project_name +
             "'"
         );
+
+        participants = participants.concat(result.records);
+
+        // Check if there are more records to retrieve
+        while (result.done === false) {
+          // Use queryMore to retrieve additional records
+          result = await sf_conn.queryMore(result.nextRecordsUrl);
+          participants = participants.concat(result.records);
+        }
 
         if (participants.totalSize === 0) {
           return {
