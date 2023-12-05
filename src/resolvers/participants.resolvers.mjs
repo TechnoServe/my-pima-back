@@ -44,20 +44,11 @@ const ParticipantsResolvers = {
           };
         }
 
-        // Parallelize additional queries using Promise.all with error handling
+        // Parallelize additional queries using Promise.all
         const [res1, reportsTo] = await Promise.all([
           sf_conn.query(`SELECT Id, Location__r.Name FROM Project_Location__c`),
           sf_conn.query(`SELECT Id, Name FROM Contact`),
-        ].map(promise => promise.catch(error => ({ error }))));
-
-        // Check for errors in the results
-        if (res1.error) {
-          throw new Error(`Error in the 'Project_Location__c' query: ${res1.error.message}`);
-        }
-
-        if (reportsTo.error) {
-          throw new Error(`Error in the 'Contact' query: ${reportsTo.error.message}`);
-        }
+        ]);
 
         return {
           message: "Participants fetched successfully",
