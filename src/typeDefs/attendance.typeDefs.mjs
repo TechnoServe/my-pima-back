@@ -11,7 +11,7 @@ const AttendanceTypeDefs = gql`
   }
 
   type Query {
-    getAttendances: AllAttendanceResponse
+    getAttendances(project_id: String!): AllAttendanceResponse
     getAttendanceByParticipant(participant_id: String!): AllAttendanceResponse
     getAttendanceBySession(session_id: String!): AllAttendanceResponse
     getAttendanceStatisticsBySession(
