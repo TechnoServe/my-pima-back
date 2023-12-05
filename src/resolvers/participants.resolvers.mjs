@@ -53,7 +53,7 @@ const ParticipantsResolvers = {
         return {
           message: "Participants fetched successfully",
           status: 200,
-          participants: participants.records.map(async (participant) => {
+          participants: participants.map(async (participant) => {
             return {
               p_id: participant.Id,
               full_name: participant.Participant_Full_Name__c,
