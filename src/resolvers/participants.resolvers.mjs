@@ -44,37 +44,20 @@ const ParticipantsResolvers = {
           };
         }
 
-        const res1 = await sf_conn.query(
-          `SELECT Id, Location__r.Name FROM Project_Location__c`,
-          async function (err, result) {
-            if (err) {
-              console.error(err);
+        // Parallelize additional queries using Promise.all with error handling
+        const [res1, reportsTo] = await Promise.all([
+          sf_conn.query(`SELECT Id, Location__r.Name FROM Project_Location__c`),
+          sf_conn.query(`SELECT Id, Name FROM Contact`),
+        ].map(promise => promise.catch(error => ({ error }))));
 
-              return {
-                message: err.message,
-                status: 500,
-              };
-            }
+        // Check for errors in the results
+        if (res1.error) {
+          throw new Error(`Error in the 'Project_Location__c' query: ${res1.error.message}`);
+        }
 
-            return result;
-          }
-        );
-
-        const reportsTo = await sf_conn.query(
-          `SELECT Id, Name FROM Contact`,
-          async function (err, result) {
-            if (err) {
-              console.error(err);
-
-              return {
-                message: err.message,
-                status: 500,
-              };
-            }
-
-            return result;
-          }
-        );
+        if (reportsTo.error) {
+          throw new Error(`Error in the 'Contact' query: ${reportsTo.error.message}`);
+        }
 
         return {
           message: "Participants fetched successfully",
