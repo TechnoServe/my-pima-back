@@ -96,7 +96,7 @@ const ParticipantsResolvers = {
               project_name: participant.Project__c,
               training_group: participant.Training_Group__c,
               household_id: participant.Household__c,
-              primary_household_member: participant.Primary_Household_Member__c,
+              primary_household_member: participant.Primary_Household_Member__c == 'Yes'? 1: 0,
             };
           }),
         };
