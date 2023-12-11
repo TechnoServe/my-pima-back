@@ -10,6 +10,7 @@ const AttendanceTypeDefs = gql`
     attendance_date: String
     attendance_status: String!
     session_id: String!
+    module_id: String!
   }
 
   type Query {
