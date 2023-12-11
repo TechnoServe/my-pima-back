@@ -6,7 +6,7 @@ const ParticipantsTypeDefs = gql`
   type Participant {
     p_id: String!
     first_name: String!
-    middle_name: String!
+    middle_name: String
     last_name: String!
     gender: String!
     age: String!

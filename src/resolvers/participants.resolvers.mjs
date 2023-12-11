@@ -57,7 +57,7 @@ const ParticipantsResolvers = {
             return {
               p_id: participant.Id,
               first_name: participant.Name,
-              middle_name: participant.Middle_Name__c,
+              middle_name: participant.Middle_Name__c?participant.Middle_Name__c : "null",
               last_name: participant.Last_Name__c,
               age: participant.Age__c,
               coffee_tree_numbers: participant.Household__r.Farm_Size__c,
