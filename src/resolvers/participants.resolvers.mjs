@@ -100,7 +100,7 @@ const ParticipantsResolvers = {
               household_id: participant.Household__c,
               primary_household_member:
                 participant.Primary_Household_Member__c == "Yes" ? 1 : 2,
-              create_in_commcare: participant.Create_In_CommCare__c
+              create_in_commCare: participant.Create_In_CommCare__c
             };
           }),
         };
