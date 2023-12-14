@@ -22,7 +22,7 @@ const ParticipantsTypeDefs = gql`
     training_group: String!
     household_id: String
     primary_household_member: String
-    create_in_commCare: String!
+    create_in_commcare: String!
   }
 
   type Query {

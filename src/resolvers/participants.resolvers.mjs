@@ -662,7 +662,7 @@ const ParticipantsResolvers = {
                 return {
                   ...rest,
                   Id: Participant__c,
-                  Resend_to_OpenFN__c: false,
+                  Resend_to_OpenFN__c: true,
                   Create_In_CommCare__c: false,
                 };
               });
