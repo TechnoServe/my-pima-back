@@ -23,7 +23,7 @@ const ParticipantsResolvers = {
 
         // Perform the initial query
         let result = await sf_conn.query(
-          "SELECT Id, Name, Middle_Name__c, Last_Name__c, Gender__c, Age__c, Household__r.Farm_Size__c, Household__r.Name, Training_Group__r.TNS_Id__c, Training_Group__r.Project_Location__c, TNS_Id__c, Status__c, Trainer_Name__c, Project__c, Training_Group__c, Training_Group__r.Responsible_Staff__r.ReportsToId, Household__c, Primary_Household_Member__c FROM Participant__c WHERE Project__c = '" +
+          "SELECT Id, Name, Middle_Name__c, Last_Name__c, Gender__c, Age__c, Household__r.Farm_Size__c, Household__r.Name, Training_Group__r.TNS_Id__c, Training_Group__r.Project_Location__c, TNS_Id__c, Status__c, Trainer_Name__c, Project__c, Training_Group__c, Training_Group__r.Responsible_Staff__r.ReportsToId, Household__c, Primary_Household_Member__c, Create_In_CommCare__c FROM Participant__c WHERE Project__c = '" +
             project.project_name +
             "'"
         );
@@ -57,7 +57,9 @@ const ParticipantsResolvers = {
             return {
               p_id: participant.Id,
               first_name: participant.Name,
-              middle_name: participant.Middle_Name__c?participant.Middle_Name__c : "null",
+              middle_name: participant.Middle_Name__c
+                ? participant.Middle_Name__c
+                : "null",
               last_name: participant.Last_Name__c,
               age: participant.Age__c,
               coffee_tree_numbers: participant.Household__r.Farm_Size__c,
@@ -96,7 +98,9 @@ const ParticipantsResolvers = {
               project_name: participant.Project__c,
               training_group: participant.Training_Group__c,
               household_id: participant.Household__c,
-              primary_household_member: participant.Primary_Household_Member__c == 'Yes'? 1: 2,
+              primary_household_member:
+                participant.Primary_Household_Member__c == "Yes" ? 1 : 2,
+              create_in_commcare: participant.Create_In_CommCare__c
             };
           }),
         };
@@ -228,7 +232,9 @@ const ParticipantsResolvers = {
     uploadParticipants: async (_, { parts_file }, { sf_conn }) => {
       try {
         const obj = await parts_file;
+
         const { filename, createReadStream } = obj.file;
+
         // Invoking the `createReadStream` will return a Readable Stream.
         let stream = createReadStream();
 
@@ -258,81 +264,104 @@ const ParticipantsResolvers = {
 
             // replace header values with Salesforce API names
             header.forEach((value, index) => {
-              if (value === "HouseHold Name") {
-                header[index] = "Name";
-              } else if (value === "HouseHold Number") {
+              if (value === "hh_number") {
                 header[index] = "Household_Number__c";
-              } else if (value === "Last Name") {
+              } else if (value === "first_name") {
+                header[index] = "Name";
+              } else if (value === "middle_name") {
+                header[index] = "Middle_Name__c";
+              } else if (value === "last_name") {
                 header[index] = "Last_Name__c";
-              } else if (value === "Primary Household Member") {
+              } else if (value === "sf_household_id") {
+                header[index] = "Household__c";
+              } else if (value === "farmer_number") {
                 header[index] = "Primary_Household_Member__c";
-              } else if (value === "TNS Id") {
+              } else if (value === "tns_id") {
                 header[index] = "TNS_Id__c";
-              } else if (value === "Gender") {
+              } else if (value === "gender") {
                 header[index] = "Gender__c";
-              } else if (value === "Age") {
+              } else if (value === "age") {
                 header[index] = "Age__c";
               } else if (value === "Phone Number") {
                 header[index] = "Phone_Number__c";
-              } else if (value === "Farm Size") {
+              } else if (value === "coffee_tree_numbers") {
                 header[index] = "Farm_Size__c";
-              } else if (value === "Training Group") {
-                header[index] = "Training_Group__c";
-              } else if (value === "Project") {
-                header[index] = "Project__c";
-              } else if (value === "Resend to OpenFN") {
-                header[index] = "Resend_to_OpenFN__c";
-              } else if (value === "Check Status") {
-                header[index] = "Check_Status__c";
-              } else if (value === "Create in Commcare") {
-                header[index] = "Create_In_CommCare__c";
+              } else if (value === "ffg_id") {
+                header[index] = "ffg_id";
+              } else if (value === "status") {
+                header[index] = "Status__c";
+              } else if (value === "farmer_sf_id") {
+                header[index] = "Participant__c";
               }
             });
 
             // Get the indexes of the required columns
             const requiredColumns = [
               "Farm_Size__c",
-              "Training_Group__c",
-              "Household_Number_Test__c",
+              "ffg_id",
+              "Household_Number__c",
               "Primary_Household_Member__c",
+              "Household__c",
             ];
-            const nameColumnIndex = header.lastIndexOf("Name");
+            const nameColumnIndex = header.lastIndexOf("Household_Number__c");
             const columnIndexMap = requiredColumns.reduce((map, column) => {
               map[column] = header.indexOf(column);
-              if (column === "Household_Number_Test__c") {
-                map[column] = header.indexOf("Household_Number__c");
-              }
+              // if (column === "Household_Number_Test__c") {
+              //   map[column] = header.indexOf("Household_Number__c");
+              // }
 
               return map;
             }, {});
 
+            console.log("columnIndexMap", columnIndexMap);
+
             // Process each row of data
             const formattedData = rows.slice(1).map((row) => {
-              const values = row.split(",");
-              const formattedRow = {};
+              if (row !== "") {
+                const values = row.split(",");
+                const formattedRow = {};
 
-              for (const column of requiredColumns) {
-                const index = columnIndexMap[column];
-                formattedRow[column] = values[index];
+                for (const column of requiredColumns) {
+                  const index = columnIndexMap[column];
+                  if (
+                    column === "Primary_Household_Member__c" &&
+                    values[index] === "1"
+                  ) {
+                    formattedRow[column] = "Yes";
+                  } else if (
+                    column === "Primary_Household_Member__c" &&
+                    values[index] === "2"
+                  ) {
+                    formattedRow[column] = "No";
+                  } else {
+                    formattedRow[column] = values[index];
+                  }
+                }
+
+                formattedRow["Household_Number__c"] = values[nameColumnIndex];
+                formattedRow["Name"] = values[nameColumnIndex];
+
+                return formattedRow;
               }
-
-              formattedRow["Name"] = values[nameColumnIndex];
-
-              return formattedRow;
             });
 
+            console.log("Total uploaded", formattedData.length);
+            console.log("formatted data", formattedData.slice(0, 4));
+
             // group data by Household_Number__c and take the row with Primary_Household_Member__c = 'Yes', and get total number of rows in each group and assign total number to Number_of_Members__c
-            const groupedData = formattedData.reduce((acc, curr) => {
-              const key = curr["Household_Number_Test__c"];
+            const groupedData = formattedData
+              .filter((item) => item !== undefined)
+              .reduce((acc, curr) => {
+                const key = curr["Household_Number__c"];
 
-              if (!acc[key]) {
-                acc[key] = [];
-              }
+                if (!acc[key]) {
+                  acc[key] = [];
+                }
 
-              acc[key].push(curr);
+                acc[key].push(curr);
 
-              return acc;
-            }, {});
+                return acc;
+              }, {});
 
             const groupedDataArray = Object.values(groupedData);
 
@@ -347,84 +376,359 @@ const ParticipantsResolvers = {
               };
             });
 
+            console.log("Total Household: ", finalFormattedHHData.length);
+            // console.log("Household: ", finalFormattedHHData.slice);
+
             // check training group from formattedPartsData by looping through each row
             // if training group does not exist, return error
-            for (const part of finalFormattedHHData) {
-              const tg_id = part.Training_Group__c;
 
-              try {
-                const tg_res = await sf_conn.query(
-                  `SELECT Id FROM Training_Group__c WHERE Id = '${tg_id}'`
-                );
+            // Extract an array of all ffg_id values from finalFormattedHHData
+            // Extract unique ffg_id values from finalFormattedHHData
+            const ffgIdSet = new Set(
+              finalFormattedHHData.map((item) => item.ffg_id)
+            );
 
-                if (tg_res.totalSize === 0) {
-                  resolve({
-                    message: `Training Group with id ${tg_id} does not exist`,
-                    status: 404,
-                  });
+            // Convert the Set to an array
+            const uniqueFfgIds = [...ffgIdSet];
 
-                  return;
-                }
-              } catch (error) {
-                console.log(error);
-                reject({
-                  message: "Training Group not found",
-                  status: 500,
-                });
+            // Check for the existence of unique ffg_id values in the training_groups array
+            const training_groups = await sf_conn.query(
+              `SELECT Id, TNS_Id__c FROM Training_Group__c WHERE TNS_Id__c IN (${uniqueFfgIds
+                .map((id) => `'${id}'`)
+                .join(",")})`
+            );
 
-                return;
+            console.log("Total Groups", training_groups.records.length);
+            console.log("Total Groups", training_groups.records.slice(0, 4));
+
+            if (training_groups.totalSize === 0) {
+              resolve({
+                message: `Could not find any FFG`,
+                status: 404,
+              });
+
+              return;
+            }
+
+            // for (const part of finalFormattedHHData) {
+            //   const ffg_id = part.ffg_id;
+
+            //   try {
+            //     const tg_res = await sf_conn.query(
+            //       `SELECT Id, TNS_Id__c FROM Training_Group__c WHERE TNS_Id__c = '${ffg_id}'`
+            //     );
+
+            //     if (tg_res.totalSize === 0) {
+            //       resolve({
+            //         message: `Training Group with ffg_id ${ffg_id} does not exist`,
+            //         status: 404,
+            //       });
+
+            //       return;
+            //     }
+
+            //     part.training_group__c = tg_res.records[0].Id;
+            //   } catch (error) {
+            //     console.log(error);
+            //     reject({
+            //       message: "Training Group not found",
+            //       status: 500,
+            //     });
+
+            //     return;
+            //   }
+            // }
+
+            const trainingGroupsMap = new Map(
+              training_groups.records.map((record) => [
+                record.TNS_Id__c,
+                record.Id,
+              ])
+            );
+
+            // Iterate over finalFormattedHHData and add the corresponding Id
+            for (const item of finalFormattedHHData) {
+              const ffgId = item.ffg_id;
+              if (trainingGroupsMap.has(ffgId)) {
+                item.training_group__c = trainingGroupsMap.get(ffgId);
+              } else {
+                return {
+                  message: `Training Group with ffg_id ${ffgId} does not exist`,
+                  status: 404,
+                };
               }
             }
 
-            // Query existing records by Household_Number__c
+            // Query records to update
             const existingHouseholdNumbers = finalFormattedHHData.map(
-              (record) => record.Household_Number_Test__c
+              (record) => record.Household__c
             );
-            const query = `SELECT Id, Household_Number_Test__c FROM Household__c WHERE Household_Number_Test__c IN ('${existingHouseholdNumbers.join(
-              "','"
-            )}')`;
+            // const query = `SELECT Id, Name, Household_Number__c FROM Household__c WHERE Id IN ('${existingHouseholdNumbers.join(
+            //   "','"
+            // )}')`;
 
             const HHdataToInsert = finalFormattedHHData.map((item) => {
-              const { Primary_Household_Member__c, ...rest } = item;
+              const {
+                Primary_Household_Member__c,
+                Household__c,
+                ffg_id,
+                ...rest
+              } = item;
+              rest.Id = Household__c;
 
               return rest;
             });
 
-            const HHResult = await sf_conn.query(
-              query,
-              async function (queryErr, result) {
-                if (queryErr) {
-                  return {
-                    status: 500,
-                  };
+            // const HHResult = await sf_conn.query(
+            //   query,
+            //   async function (queryErr, result) {
+            //     if (queryErr) {
+            //       return {
+            //         status: 500,
+            //       };
+            //     }
+
+            const HHResult = async () => {
+              // const existingRecords = result.records;
+
+              const recordsToUpdateInSalesforce = [];
+              const newRecordsToInsertInSalesforce = [];
+
+              HHdataToInsert.forEach((record) => {
+                // const existingRecord = existingRecords.find(
+                //   (existing) =>
+                //     existing.Name ===
+                //     record.Household_Number__c
+                // );
+
+                if (record.Id) {
+                  // If the record already exists, update it
+                  // record.Id = existingRecord.Id;
+                  recordsToUpdateInSalesforce.push(record);
+                } else {
+                  // If the record does not exist, insert it
+                  newRecordsToInsertInSalesforce.push(record);
                 }
+              });
 
-                const existingRecords = result.records;
+              console.log(
+                "recordsToUpdateInSalesforce",
+                recordsToUpdateInSalesforce.length
+              );
+              console.log(
+                "newRecordsToInsertInSalesforce",
+                newRecordsToInsertInSalesforce.length
+              );
 
-                const recordsToUpdateInSalesforce = [];
-                const newRecordsToInsertInSalesforce = [];
+              const returnedResult1 = await sf_conn
+                .sobject("Household__c")
+                .update(
+                  recordsToUpdateInSalesforce,
+                  function (updateErr, updateResult) {
+                    if (updateErr) {
+                      return { status: 500 };
+                    }
 
-                HHdataToInsert.forEach((record) => {
-                  const existingRecord = existingRecords.find(
-                    (existing) =>
-                      existing.Household_Number_Test__c ===
-                      record.Household_Number_Test__c
-                  );
+                    return {
+                      status: 200,
+                      data: updateResult,
+                    };
+                  }
+                );
 
-                  if (existingRecord) {
+              // const returnedResult2 = await sf_conn
+              //   .sobject("Household__c")
+              //   .create(
+              //     newRecordsToInsertInSalesforce,
+              //     function (insertErr, insertResult) {
+              //       if (insertErr) {
+              //         return { status: 500 };
+              //       }
+
+              //       return {
+              //         status: 200,
+              //         data: insertResult,
+              //       };
+              //     }
+              //   );
+
+              return [...returnedResult1];
+            };
+            //);
+
+            const hhResult = await HHResult();
+
+            hhResult.map((result) => console.log(result));
+
+            if (hhResult.length > 0) {
+              // query household records by Household_Number__c
+
+              // let HHRecords = [];
+
+              // // Perform the initial query
+              // const records = await sf_conn.query(
+              //   `SELECT Id, Household_Numbe__c FROM Household__c WHERE Id IN ('${HHResult.map(
+              //     (record) => record.id
+              //   ).join("','")}')`
+              // );
+
+              // HHRecords = HHRecords.concat(records.records);
+
+              // // Check if there are more records to retrieve
+              // while (records.done === false) {
+              //   // Use queryMore to retrieve additional records
+              //   records = await sf_conn.queryMore(records.nextRecordsUrl);
+              //   HHRecords = HHRecords.concat(records.records);
+              // }
+
+              // map data and headers for Participant__c
+              const participantsHeaders = [
+                "Name",
+                "Middle_Name__c",
+                "Last_Name__c",
+                "Gender__c",
+                "Age__c",
+                //"Phone_Number__c",
+                "Primary_Household_Member__c",
+                "TNS_Id__c",
+                "Training_Group__c",
+                "Household__c",
+                "Status__c",
+                "Participant__c",
+              ];
+
+              // "Resend_to_OpenFN__c",
+              // "Check_Status__c",
+              // "Create_In_CommCare__c",
+
+              const columnIndexMap = participantsHeaders.reduce(
+                (map, column) => {
+                  map[column] = header.indexOf(column);
+                  return map;
+                },
+                {}
+              );
+
+              // GET ALL FFGS
+
+              const formattedPartsData = rows.slice(1).map((row) => {
+                if (row !== "") {
+                  const values = row.split(",");
+                  const formattedRow = {};
+
+                  for (const column of participantsHeaders) {
+                    const index = columnIndexMap[column];
+                    formattedRow[column] = values[index];
+
+                    formattedRow["Training_Group__c"] = trainingGroupsMap.get(
+                      values[header.indexOf("ffg_id")]
+                    );
+
+                    // Change
+                    if (
+                      column === "Primary_Household_Member__c" &&
+                      values[index] === "1"
+                    ) {
+                      formattedRow[column] = "Yes";
+                    } else if (
+                      column === "Primary_Household_Member__c" &&
+                      values[index] === "2"
+                    ) {
+                      formattedRow[column] = "No";
+                    } else {
+                      formattedRow[column] = values[index];
+                    }
+
+                    formattedRow["Resend_to_OpenFN__c"] = "TRUE";
+                    formattedRow["Create_In_CommCare__c"] = "FALSE";
+                    formattedRow["Check_Status__c"] = "TRUE";
+                    // formattedRow["Household__c"] = HHRecords.find(
+                    //   (record) =>
+                    //     record.Household_Number__c ===
+                    //     values[header.indexOf("Household_Number__c")]
+                    // ).Id;
+                  }
+
+                  return formattedRow;
+                }
+              });
+
+              console.log("Participants to insert", formattedPartsData.length);
+              console.log("Participants sample", formattedPartsData.slice(45));
+
+              // insert res.id to Household__c field in participantsData
+              const participantsData = formattedPartsData.filter((item) => item !== undefined).map((part, index) => {
+                const { Participant__c, ...rest } = part;
+                return {
+                  ...rest,
+                  Id: Participant__c,
+                  Resend_to_OpenFN__c: false,
+                  Create_In_CommCare__c: false,
+                };
+              });
+
+              // Query existing records by Participant__c
+              const existingParticipants = participantsData.map(
+                (record) => record.TNS_Id__c
+              );
+
+              // const query = `SELECT Id, TNS_Id__c FROM Participant__c WHERE TNS_Id__c IN ('${existingParticipants.join(
+              //   "','"
+              // )}')`;
+
+              // const partsResult = await sf_conn.query(
+              //   query,
+              //   async function (queryErr, result) {
+              //     if (queryErr) {
+              //       return {
+              //         status: 500,
+              //       };
+              //     }
+
+              const partsResult = async () => {
+                //const existingRecords = result.records;
+
+                const partsToUpdateInSalesforce = [];
+                const newPartsToInsertInSalesforce = [];
+
+                //if (existingRecords.length > 0) {
+                participantsData.forEach((record) => {
+                  // const existingRecord = existingRecords.find(
+                  //   (existing) => existing.TNS_Id__c === record.TNS_Id__c
+                  // );
+
+                  if (record.Id) {
                     // If the record already exists, update it
-                    record.Id = existingRecord.Id;
-                    recordsToUpdateInSalesforce.push(record);
+                    //record.Id = existingRecord.Id;
+                    record.Resend_to_OpenFN__c = true;
+                    partsToUpdateInSalesforce.push(record);
                   } else {
                     // If the record does not exist, insert it
-                    newRecordsToInsertInSalesforce.push(record);
+                    newPartsToInsertInSalesforce.push(record);
                   }
                 });
+                // } else {
+                //   newPartsToInsertInSalesforce.push(...participantsData);
+                // }
 
-                const returnedResult1 = await sf_conn
-                  .sobject("Household__c")
+                console.log(
+                  "partsToUpdateInSalesforce",
+                  partsToUpdateInSalesforce.length
+                );
+                console.log(
+                  "newPartsToInsertInSalesforce",
+                  newPartsToInsertInSalesforce.length
+                );
+                console.log(
+                  "newPartsToInsertInSalesforce",
+                  newPartsToInsertInSalesforce
+                );
+
+                // Update existing records
+                const partsReturnedResult1 = await sf_conn
+                  .sobject("Participant__c")
                   .update(
-                    recordsToUpdateInSalesforce,
+                    partsToUpdateInSalesforce,
                     function (updateErr, updateResult) {
                       if (updateErr) {
                         return { status: 500 };
@@ -437,167 +741,33 @@ const ParticipantsResolvers = {
                     }
                   );
 
-                const returnedResult2 = await sf_conn
-                  .sobject("Household__c")
-                  .create(
-                    newRecordsToInsertInSalesforce,
-                    function (insertErr, insertResult) {
-                      if (insertErr) {
-                        return { status: 500 };
-                      }
+                // const partsReturnedResult2 = await sf_conn
+                //   .sobject("Participant__c")
+                //   .create(
+                //     newPartsToInsertInSalesforce,
+                //     function (insertErr, insertResult) {
+                //       if (insertErr) {
+                //         return console.error(insertErr);
+                //       }
 
-                      return {
-                        status: 200,
-                        data: insertResult,
-                      };
-                    }
-                  );
+                //       return {
+                //         status: 200,
+                //         data: insertResult,
+                //       };
+                //     }
+                //   );
 
-                return [...returnedResult1, ...returnedResult2];
-              }
-            );
+                return [...partsReturnedResult1];
+              };
+              //);
 
-            if (HHResult.length > 0) {
-              // query household records by Household_Number__c
-              const HHRecords = await sf_conn.query(
-                `SELECT Id, Household_Number_Test__c FROM Household__c WHERE Id IN ('${HHResult.map(
-                  (record) => record.id
-                ).join("','")}')`
-              );
+              const partsData = await partsResult();
 
-              // map data and headers for Participant__c
-              const participantsHeaders = [
-                "Name",
-                "Last_Name__c",
-                "Gender__c",
-                "Age__c",
-                "Phone_Number__c",
-                "Primary_Household_Member__c",
-                "TNS_Id__c",
-                "Training_Group__c",
-                "Resend_to_OpenFN__c",
-                "Check_Status__c",
-                "Create_In_CommCare__c",
-                "Household__c",
-              ];
-
-              const columnIndexMap = participantsHeaders.reduce(
-                (map, column) => {
-                  map[column] = header.indexOf(column);
-                  return map;
-                },
-                {}
-              );
-
-              const formattedPartsData = rows.slice(1).map((row) => {
-                const values = row.split(",");
-                const formattedRow = {};
-
-                for (const column of participantsHeaders) {
-                  const index = columnIndexMap[column];
-                  formattedRow[column] = values[index];
-                  formattedRow["Household__c"] = HHRecords.records.find(
-                    (record) =>
-                      record.Household_Number_Test__c ===
-                      values[header.indexOf("Household_Number__c")]
-                  ).Id;
-                }
-
-                return formattedRow;
-              });
-
-              // insert res.id to Household__c field in participantsData
-              const participantsData = formattedPartsData.map((part, index) => {
-                return {
-                  ...part,
-                  Resend_to_OpenFN__c: false,
-                  Create_In_CommCare__c: false,
-                };
-              });
-
-              // Query existing records by Participant__c
-              const existingParticipants = participantsData.map(
-                (record) => record.TNS_Id__c
-              );
-
-              const query = `SELECT Id, TNS_Id__c FROM Participant__c WHERE TNS_Id__c IN ('${existingParticipants.join(
-                "','"
-              )}')`;
-
-              const partsResult = await sf_conn.query(
-                query,
-                async function (queryErr, result) {
-                  if (queryErr) {
-                    return {
-                      status: 500,
-                    };
-                  }
-
-                  const existingRecords = result.records;
-
-                  const partsToUpdateInSalesforce = [];
-                  const newPartsToInsertInSalesforce = [];
-
-                  if (existingRecords.length > 0) {
-                    participantsData.forEach((record) => {
-                      const existingRecord = existingRecords.find(
-                        (existing) => existing.TNS_Id__c === record.TNS_Id__c
-                      );
-
-                      if (existingRecord) {
-                        // If the record already exists, update it
-                        record.Id = existingRecord.Id;
-                        record.Resend_to_OpenFN__c = true;
-                        partsToUpdateInSalesforce.push(record);
-                      } else {
-                        // If the record does not exist, insert it
-                        newPartsToInsertInSalesforce.push(record);
-                      }
-                    });
-                  } else {
-                    newPartsToInsertInSalesforce.push(...participantsData);
-                  }
-
-                  // Update existing records
-                  const partsReturnedResult1 = await sf_conn
-                    .sobject("Participant__c")
-                    .update(
-                      partsToUpdateInSalesforce,
-                      function (updateErr, updateResult) {
-                        if (updateErr) {
-                          return { status: 500 };
-                        }
-
-                        return {
-                          status: 200,
-                          data: updateResult,
-                        };
-                      }
-                    );
-
-                  const partsReturnedResult2 = await sf_conn
-                    .sobject("Participant__c")
-                    .create(
-                      newPartsToInsertInSalesforce,
-                      function (insertErr, insertResult) {
-                        if (insertErr) {
-                          return console.error(insertErr);
-                        }
-
-                        return {
-                          status: 200,
-                          data: insertResult,
-                        };
-                      }
-                    );
-
-                  return [...partsReturnedResult1, ...partsReturnedResult2];
-                }
-              );
+              console.log(partsData[0]);
 
               // check if every item in partsResult has success:true
-              if (partsResult.length > 0) {
-                const success = partsResult.every(
+              if (partsData.length > 0) {
+                const success = partsData.every(
                   (result) => result.success === true
                 );
 
@@ -688,5 +858,7 @@ const ParticipantsResolvers = {
     },
   },
 };
+
+// Helper Functions
 
 export default ParticipantsResolvers;
