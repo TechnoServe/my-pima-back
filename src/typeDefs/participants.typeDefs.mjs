@@ -31,8 +31,7 @@ const ParticipantsTypeDefs = gql`
   }
 
   type Mutation {
-    uploadParticipants(): UploadResponse
-    syncParticipantsWithCOMMCARE(project_id: String!): UploadResponse
+    uploadParticipants(parts_file: Upload!): UploadResponse
   }
 
   type AllParticipantsResponse {
