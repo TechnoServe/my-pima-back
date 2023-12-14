@@ -881,7 +881,7 @@ const ParticipantsResolvers = {
 
       // Perform the initial query
       let result = await sf_conn.query(
-        "SELECT Id, Create_In_CommCare__c FROM Participant__c WHERE Project__c = '" +
+        "SELECT Id, Name, Create_In_CommCare__c FROM Participant__c WHERE Project__c = '" +
           project.project_name +
           "'"
       );
@@ -899,7 +899,7 @@ const ParticipantsResolvers = {
       participants = participants.map((participant) => {
         return {
           Id: participant.Id,
-          Create_In_CommCare__c: true, // Assuming Create_In_CommCare__c is a checkbox
+          Create_In_CommCare__c: TRUE, // Assuming Create_In_CommCare__c is a checkbox
         };
       });
 
