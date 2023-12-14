@@ -57,21 +57,21 @@ app.use(function (req, res, next) {
   next();
 });
 
-const redis = new Redis({
-  host: "redis-12533.c15.us-east-1-2.ec2.cloud.redislabs.com",
-  port: 12533,
-  password: "rgyzuNLcxfcLnLkGyqauBQrPqezHEPft",
-  retryStrategy: (times) => {
-    // reconnect after
-    return Math.min(times * 50, 2000);
-  },
-});
+// const redis = new Redis({
+//   host: "redis-12533.c15.us-east-1-2.ec2.cloud.redislabs.com",
+//   port: 12533,
+//   password: "rgyzuNLcxfcLnLkGyqauBQrPqezHEPft",
+//   retryStrategy: (times) => {
+//     // reconnect after
+//     return Math.min(times * 50, 2000);
+//   },
+// });
 
-// Set up Redis pub-sub for real-time subscriptions (optional)
-const pubSub = new RedisPubSub({
-  publisher: redis,
-  subscriber: redis,
-});
+// // Set up Redis pub-sub for real-time subscriptions (optional)
+// const pubSub = new RedisPubSub({
+//   publisher: redis,
+//   subscriber: redis,
+// });
 
 dotenv.config();
 
