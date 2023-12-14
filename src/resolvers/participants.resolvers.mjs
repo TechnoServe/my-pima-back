@@ -860,78 +860,95 @@ const ParticipantsResolvers = {
     },
 
     syncParticipantsWithCOMMCARE: async (_, { project_id }, { sf_conn }) => {
-      console.log("start here")
-      // check if project exists by project_id
-      const project = await Projects.findOne({
-        where: { sf_project_id: project_id },
-      });
+      try {
+        console.log("start here");
+        // check if project exists by project_id
+        const project = await Projects.findOne({
+          where: { sf_project_id: project_id },
+        });
 
-      console.log(project)
+        console.log(project);
 
-      if (!project) {
-        return {
-          message: "Project not found",
-          status: 404,
-        };
-      }
+        if (!project) {
+          return {
+            message: "Project not found",
+            status: 404,
+          };
+        }
 
-      console.log(project)
+        console.log(project);
 
-      let participants = [];
+        let participants = [];
 
-      // Perform the initial query
-      let result = await sf_conn.query(
-        "SELECT Id, Name, Create_In_CommCare__c, Resend_to_OpenFN__c FROM Participant__c WHERE Project__c = '" +
-          project.project_name +
-          "'"
-      );
+        // Perform the initial query
+        let result = await sf_conn.query(
+          "SELECT Id, Name, Create_In_CommCare__c, Resend_to_OpenFN__c FROM Participant__c WHERE Project__c = '" +
+            project.project_name +
+            "'"
+        );
 
-      participants = participants.concat(result.records);
-
-      // Check if there are more records to retrieve
-      while (result.done === false) {
-        // Use queryMore to retrieve additional records
-        result = await sf_conn.queryMore(result.nextRecordsUrl);
         participants = participants.concat(result.records);
-      }
 
-      // Update the Create_In_CommCare__c field to TRUE for all participants
-      participants = participants.map((participant) => {
+        // Check if there are more records to retrieve
+        while (result.done === false) {
+          // Use queryMore to retrieve additional records
+          result = await sf_conn.queryMore(result.nextRecordsUrl);
+          participants = participants.concat(result.records);
+        }
+
+        // Update the Create_In_CommCare__c field to TRUE for all participants
+        participants = participants.map((participant) => {
+          return {
+            Id: participant.Id,
+            Resend_to_OpenFN__c: false,
+            Create_In_CommCare__c: true, // Assuming Create_In_CommCare__c is a checkbox
+          };
+        });
+
+        console.log(participants);
+
+        // Use Promise to handle the update operation
+        const updateResult = await new Promise((resolve, reject) => {
+          sf_conn
+            .sobject("Participant__c")
+            .update(participants, (updateErr, updateResult) => {
+              if (updateResult) {
+                reject({ status: 500 });
+              } else {
+                resolve({
+                  data: updateResult,
+                  status: 200,
+                });
+              }
+            });
+        });
+
+        if (updateResult.length > 0) {
+          const success = updateResult.every(
+            (result) => result.success === true
+          );
+
+          if (success) {
+            resolve({
+              message: "Participants synced successfully",
+              status: 200,
+            });
+
+            return;
+          }
+        }
+
+        resolve({
+          message: "Failed to syncing participants",
+          status: 500,
+        });
+      } catch (error) {
+        console.log(error);
         return {
-          Id: participant.Id,
-          Resend_to_OpenFN__c: false,
-          Create_In_CommCare__c: true, // Assuming Create_In_CommCare__c is a checkbox
+          message: "Error syncing participants",
+          status: 500,
         };
-      });
-
-      console.log(participants);
-
-      // Use Promise to handle the update operation
-      const updateResult = await new Promise((resolve, reject) => {
-        sf_conn
-          .sobject("Household__c")
-          .update(participants, (updateErr, updateResult) => {
-            if (updateErr) {
-              reject({ status: 500 });
-            } else {
-              resolve({
-                message: "Synced successfully",
-                status: 200,
-              });
-            }
-          });
-      });
-
-      console.log(updateResult);
-
-      return updateResult;
-      // } catch (error) {
-      //   console.log(error);
-      //   return {
-      //     message: "Error syncing participants",
-      //     status: 500,
-      //   };
-      // }
+      }
     },
   },
 };
