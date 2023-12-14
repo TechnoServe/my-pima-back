@@ -899,7 +899,7 @@ const ParticipantsResolvers = {
       participants = participants.map((participant) => {
         return {
           Id: participant.Id,
-          Create_In_CommCare__c: false, // Assuming Create_In_CommCare__c is a checkbox
+          Create_In_CommCare__c: true, // Assuming Create_In_CommCare__c is a checkbox
         };
       });
 
