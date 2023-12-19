@@ -306,10 +306,10 @@ const ParticipantsResolvers = {
               });
             }
 
-            return reject({
-              message: "END OF PROGRAM",
-              status: 500,
-            });
+            // return reject({
+            //   message: "END OF PROGRAM",
+            //   status: 500,
+            // });
 
             console.log(attendance);
             console.log("Done updating the attendane...");
