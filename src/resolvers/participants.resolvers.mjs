@@ -295,6 +295,25 @@ const ParticipantsResolvers = {
               }
             });
 
+            console.log("Begin updating the attendane...");
+
+            const attendance = await updateAttendance(rows, sf_conn);
+
+            if (attendance.status !== 200) {
+              return reject({
+                message: attendance.message,
+                status: attendance.status,
+              });
+            }
+
+            return reject({
+              message: "END OF PROGRAM",
+              status: 500,
+            });
+
+            console.log(attendance);
+            console.log("Done updating the attendane...");
+
             // Get the indexes of the required columns
             const requiredColumns = [
               "Farm_Size__c",
@@ -838,22 +857,22 @@ const ParticipantsResolvers = {
           }
 
           return {
-            message: "Failed to upload new participants",
+            message: "Failed to upload new participants 1",
             status: 500,
           };
         } catch (error) {
-          console.error(error);
+          // console.error(error);
 
           return {
-            message: "Failed to upload new participants",
-            status: 500,
+            message: error.message,
+            status: error.status,
           };
         }
       } catch (error) {
-        console.error(error);
+        //console.error(error);
 
         return {
-          message: "Failed to upload new participants",
+          message: "Failed to upload new participants 3",
           status: 500,
         };
       }
@@ -954,5 +973,124 @@ const ParticipantsResolvers = {
 };
 
 // Helper Functions
+
+const updateAttendance = async (rows, sf_conn) => {
+  try {
+    const formattedData = rows.map((row) => {
+      const slicedPart = row.split(",").slice(21);
+      const itemAtIndex10 = row.split(",")[10];
+      return [itemAtIndex10, ...slicedPart];
+    });
+
+    console.log(formattedData);
+
+    // Clean empty strings and \r, and remove undefined arrays
+    const cleanedArray = formattedData
+      .filter((subarray) => subarray && subarray.length > 0)
+      .map((subarray) =>
+        subarray.map((item) =>
+          item !== undefined ? item.replace(/[\r\n]/g, "").trim() : ""
+        )
+      );
+
+    const headers = cleanedArray[0].map((header, index) => {
+      if (index === 0) {
+        // Keep the header with farmer_sf_id unchanged
+        return header;
+      } else {
+        // Clean other headers by separating the text by '-' and returning the last value
+        const parts = header.split("-");
+        return parts[parts.length - 1].trim();
+      }
+    });
+
+    // Create an array of columns
+    const columns = headers.map((header, index) =>
+      cleanedArray.slice(1).map((data) => data[index])
+    );
+
+    // Clean special characters from columns
+    const cleanedColumns = columns.map((column) =>
+      column.map((value) => {
+        if (value !== undefined && value !== null) {
+          return String(value).replace(/[^\w\s-]/g, "");
+        }
+        return "";
+      })
+    );
+
+    // Remove empty arrays
+    const filteredColumns = cleanedColumns.filter(
+      (column) => column.length > 0
+    );
+
+    console.log(headers);
+
+    console.log(filteredColumns);
+
+    const sObject = "Attendance__c";
+
+    const farmerIdIndex = headers.indexOf("farmer_sf_id");
+
+    const attendanceToUpdate = [];
+
+    for (let i = 1; i < filteredColumns.length; i++) {
+      for (let j = farmerIdIndex + 1; j < filteredColumns[i].length; j++) {
+        const moduleId = headers[i];
+        const attendanceValue = filteredColumns[i][j - 1];
+        const farmerId = filteredColumns[farmerIdIndex][j - 1];
+
+        console.log(attendanceValue);
+        if (attendanceValue !== "") {
+          const query = `SELECT Id FROM ${sObject} WHERE Participant__c = '${farmerId}' AND Training_Session__r.Training_Module__c = '${moduleId}' LIMIT 1`;
+
+          console.log(query);
+
+          const result = await sf_conn.query(query);
+
+          if (result.records.length > 0) {
+            const recordId = result.records[0].Id;
+
+            // Use push instead of concat to add elements to the existing array
+            attendanceToUpdate.push({
+              Id: recordId,
+              Status__c: attendanceValue === "1" ? "Present" : "Absent",
+            });
+          } else {
+            throw new Error(
+              `No matching record found for farmerId: ${farmerId} and moduleId: ${moduleId}`
+            );
+          }
+        }
+      }
+    }
+
+    // Update the attendance record
+    const updateResult = await sf_conn
+      .sobject(sObject)
+      .update(attendanceToUpdate);
+
+    if (!updateResult.success) {
+      console.error(updateResult);
+      //throw new Error(updateResult.errors.join(", "));
+    } else {
+      console.log(
+        "Updated records with Ids:",
+        attendanceToUpdate.map((record) => record.Id)
+      );
+    }
+
+    return {
+      message: "Successfully updated attendance records",
+      status: 200,
+    };
+  } catch (error) {
+    // console.error(error);
+    return {
+      message: error.message,
+      status: 500,
+    };
+  }
+};
 
 export default ParticipantsResolvers;
