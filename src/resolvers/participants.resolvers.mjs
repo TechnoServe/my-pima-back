@@ -297,22 +297,22 @@ const ParticipantsResolvers = {
 
             console.log("Begin updating the attendane...");
 
-            const attendance = await updateAttendance(rows, sf_conn);
+            // const attendance = await updateAttendance(rows, sf_conn);
 
-            if (attendance.status !== 200) {
-              return reject({
-                message: attendance.message,
-                status: attendance.status,
-              });
-            }
+            // if (attendance.status !== 200) {
+            //   return reject({
+            //     message: attendance.message,
+            //     status: attendance.status,
+            //   });
+            // }
 
             // return reject({
             //   message: "END OF PROGRAM",
             //   status: 500,
             // });
 
-            console.log(attendance);
-            console.log("Done updating the attendane...");
+            // console.log(attendance);
+            console.log("Done updating the attendance...");
 
             // Get the indexes of the required columns
             const requiredColumns = [
@@ -331,8 +331,6 @@ const ParticipantsResolvers = {
 
               return map;
             }, {});
-
-            console.log("columnIndexMap", columnIndexMap);
 
             // Process each row of data
             const formattedData = rows.slice(1).map((row) => {
@@ -365,7 +363,7 @@ const ParticipantsResolvers = {
             });
 
             console.log("Total uploaded", formattedData.length);
-            console.log("formatted data", formattedData.slice(0, 4));
+            console.log("Sample formatted data", formattedData.slice(0, 1));
 
             // group data by Household_Number__c and take the row with Primary_Household_Member__c = 'Yes', and get total number of rows in each group and assign total number to Number_of_Members__c
             const groupedData = formattedData
@@ -384,18 +382,23 @@ const ParticipantsResolvers = {
 
             const groupedDataArray = Object.values(groupedData);
 
-            const finalFormattedHHData = groupedDataArray.map((group) => {
-              const primaryMember = group.find(
-                (member) => member["Primary_Household_Member__c"] === "Yes"
-              );
+            const finalFormattedHHData = groupedDataArray
+              .map((group) => {
+                const primaryMember = group.find(
+                  (member) => member["Primary_Household_Member__c"] === "Yes"
+                );
+                if (primaryMember) {
+                  return {
+                    ...primaryMember,
+                    Number_of_Members__c: group.length,
+                  };
+                }
+              })
+              .filter((value) => value !== undefined);
 
-              return {
-                ...primaryMember,
-                Number_of_Members__c: group.length,
-              };
-            });
+            //console.log("Sample formatted data", finalFormattedHHData);
 
-            console.log("Total Household: ", finalFormattedHHData.length);
+            // console.log("Total Household: ", finalFormattedHHData.length);
             // console.log("Household: ", finalFormattedHHData.slice);
 
             // check training group from formattedPartsData by looping through each row
@@ -417,8 +420,8 @@ const ParticipantsResolvers = {
                 .join(",")})`
             );
 
-            console.log("Total Groups", training_groups.records.length);
-            console.log("Total Groups", training_groups.records.slice(0, 4));
+            //console.log("Total Groups", training_groups.records.length);
+            //console.log("Total Groups", training_groups.records.slice(0, 1));
 
             if (training_groups.totalSize === 0) {
               resolve({
@@ -465,16 +468,19 @@ const ParticipantsResolvers = {
               ])
             );
 
+            //console.log(finalFormattedHHData);
+
             // Iterate over finalFormattedHHData and add the corresponding Id
             for (const item of finalFormattedHHData) {
               const ffgId = item.ffg_id;
               if (trainingGroupsMap.has(ffgId)) {
                 item.training_group__c = trainingGroupsMap.get(ffgId);
               } else {
-                return {
+                console.log(item);
+                return resolve({
                   message: `Training Group with ffg_id ${ffgId} does not exist`,
                   status: 404,
-                };
+                });
               }
             }
 
@@ -485,6 +491,8 @@ const ParticipantsResolvers = {
             // const query = `SELECT Id, Name, Household_Number__c FROM Household__c WHERE Id IN ('${existingHouseholdNumbers.join(
             //   "','"
             // )}')`;
+
+            console.log(existingHouseholdNumbers);
 
             const HHdataToInsert = finalFormattedHHData.map((item) => {
               const {
@@ -497,6 +505,10 @@ const ParticipantsResolvers = {
 
               return rest;
             });
+
+            console.log(HHdataToInsert);
+
+            console.log("we are here....");
 
             // const HHResult = await sf_conn.query(
             //   query,
@@ -856,6 +868,8 @@ const ParticipantsResolvers = {
             };
           }
 
+          console.log(streamResult);
+
           return {
             message: "Failed to upload new participants 1",
             status: 500,
@@ -982,8 +996,6 @@ const updateAttendance = async (rows, sf_conn) => {
       return [itemAtIndex10, ...slicedPart];
     });
 
-    console.log(formattedData);
-
     // Clean empty strings and \r, and remove undefined arrays
     const cleanedArray = formattedData
       .filter((subarray) => subarray && subarray.length > 0)
@@ -1024,10 +1036,6 @@ const updateAttendance = async (rows, sf_conn) => {
       (column) => column.length > 0
     );
 
-    console.log(headers);
-
-    console.log(filteredColumns);
-
     const sObject = "Attendance__c";
 
     const farmerIdIndex = headers.indexOf("farmer_sf_id");
@@ -1040,11 +1048,8 @@ const updateAttendance = async (rows, sf_conn) => {
         const attendanceValue = filteredColumns[i][j - 1];
         const farmerId = filteredColumns[farmerIdIndex][j - 1];
 
-        console.log(attendanceValue);
         if (attendanceValue !== "") {
           const query = `SELECT Id FROM ${sObject} WHERE Participant__c = '${farmerId}' AND Training_Session__r.Training_Module__c = '${moduleId}' LIMIT 1`;
-
-          console.log(query);
 
           const result = await sf_conn.query(query);
 
