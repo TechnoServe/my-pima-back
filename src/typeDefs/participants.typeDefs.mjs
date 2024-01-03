@@ -8,7 +8,7 @@ const ParticipantsTypeDefs = gql`
     first_name: String
     middle_name: String
     last_name: String
-    gender: String!
+    gender: String
     age: String
     coffee_tree_numbers: String
     hh_number: String!
