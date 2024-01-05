@@ -23,7 +23,7 @@ const ParticipantsResolvers = {
 
         // Perform the initial query
         let result = await sf_conn.query(
-          "SELECT Id, Name, Middle_Name__c, Last_Name__c, Gender__c, Age__c, Household__r.Farm_Size__c, Household__r.Name, Training_Group__r.TNS_Id__c, Training_Group__r.Project_Location__c, TNS_Id__c, Status__c, Trainer_Name__c, Project__c, Training_Group__c, Training_Group__r.Responsible_Staff__r.ReportsToId, Household__c, Primary_Household_Member__c, Create_In_CommCare__c, Other_ID_Number__c FROM Participant__c WHERE Project__c = '" +
+          "SELECT Id, Name, Middle_Name__c, Last_Name__c, Gender__c, Age__c, Household__c, Household__r.Farm_Size__c, Household__r.Name, Training_Group__r.TNS_Id__c, Training_Group__r.Project_Location__c, TNS_Id__c, Status__c, Trainer_Name__c, Project__c, Training_Group__c, Training_Group__r.Responsible_Staff__r.ReportsToId, Household__c, Primary_Household_Member__c, Create_In_CommCare__c, Other_ID_Number__c FROM Participant__c WHERE Project__c = '" +
             project.project_name +
             "'"
         );
@@ -62,8 +62,12 @@ const ParticipantsResolvers = {
                 : "null",
               last_name: participant.Last_Name__c,
               age: participant.Age__c,
-              coffee_tree_numbers: participant.Household__r.Farm_Size__c,
-              hh_number: participant.Household__r.Name,
+              coffee_tree_numbers: participant.Household__c
+                ? participant.Household__r.Farm_Size__c
+                : null,
+              hh_number: participant.Household__c
+                ? participant.Household__r.Name
+                : null,
               ffg_id: participant.Training_Group__r.TNS_Id__c,
               gender: participant.Gender__c,
               location:
@@ -101,7 +105,7 @@ const ParticipantsResolvers = {
               primary_household_member:
                 participant.Primary_Household_Member__c == "Yes" ? 1 : 2,
               create_in_commcare: participant.Create_In_CommCare__c,
-              coop_membership_number: participant.Other_ID_Number__c
+              coop_membership_number: participant.Other_ID_Number__c,
             };
           }),
         };
@@ -363,8 +367,8 @@ const ParticipantsResolvers = {
               }
             });
 
-            console.log("Total uploaded", formattedData.length);
-            console.log("Sample formatted data", formattedData.slice(0, 1));
+            console.log("Total Uploaded Records: ", formattedData.length);
+            // console.log("Sample formatted data", formattedData);
 
             // group data by Household_Number__c and take the row with Primary_Household_Member__c = 'Yes', and get total number of rows in each group and assign total number to Number_of_Members__c
             const groupedData = formattedData
@@ -388,19 +392,33 @@ const ParticipantsResolvers = {
                 const primaryMember = group.find(
                   (member) => member["Primary_Household_Member__c"] === "Yes"
                 );
+
                 if (primaryMember) {
                   return {
                     ...primaryMember,
                     Number_of_Members__c: group.length,
                   };
+                } else {
+                  //console.log("HOUSEHOLD PRIME MISSING", group);
+                  return {
+                    message: `Household ${group[0].Household_Number__c} does not have a primary member.`,
+                    status: 500,
+                  };
                 }
               })
               .filter((value) => value !== undefined);
 
-            //console.log("Sample formatted data", finalFormattedHHData);
-
-            // console.log("Total Household: ", finalFormattedHHData.length);
-            // console.log("Household: ", finalFormattedHHData.slice);
+            // Assuming you want to handle the error at this point
+            const errorGroups = finalFormattedHHData.filter(
+              (entry) => entry.status === 500
+            );
+            if (errorGroups.length > 0) {
+              // console.error("Error in some groups:", errorGroups);
+              return resolve({
+                status: 400,
+                message: errorGroups[0].message,
+              });
+            }
 
             // check training group from formattedPartsData by looping through each row
             // if training group does not exist, return error
@@ -493,7 +511,7 @@ const ParticipantsResolvers = {
             //   "','"
             // )}')`;
 
-            console.log(existingHouseholdNumbers);
+            // console.log(existingHouseholdNumbers);
 
             const HHdataToInsert = finalFormattedHHData.map((item) => {
               const {
@@ -568,23 +586,23 @@ const ParticipantsResolvers = {
                   }
                 );
 
-              // const returnedResult2 = await sf_conn
-              //   .sobject("Household__c")
-              //   .create(
-              //     newRecordsToInsertInSalesforce,
-              //     function (insertErr, insertResult) {
-              //       if (insertErr) {
-              //         return { status: 500 };
-              //       }
+              const returnedResult2 = await sf_conn
+                .sobject("Household__c")
+                .create(
+                  newRecordsToInsertInSalesforce,
+                  function (insertErr, insertResult) {
+                    if (insertErr) {
+                      return { status: 500 };
+                    }
 
-              //       return {
-              //         status: 200,
-              //         data: insertResult,
-              //       };
-              //     }
-              //   );
+                    return {
+                      status: 200,
+                      data: insertResult,
+                    };
+                  }
+                );
 
-              return [...returnedResult1];
+              return [...returnedResult1, ...returnedResult2];
             };
             //);
 
@@ -595,23 +613,25 @@ const ParticipantsResolvers = {
             if (hhResult.length > 0) {
               // query household records by Household_Number__c
 
-              // let HHRecords = [];
+              let HHRecords = [];
 
-              // // Perform the initial query
-              // const records = await sf_conn.query(
-              //   `SELECT Id, Household_Numbe__c FROM Household__c WHERE Id IN ('${HHResult.map(
-              //     (record) => record.id
-              //   ).join("','")}')`
-              // );
+              // Perform the initial query
+              const records = await sf_conn.query(
+                `SELECT Id, Household_Number__c FROM Household__c WHERE Id IN ('${hhResult
+                  .map((record) => record.id)
+                  .join("','")}')`
+              );
 
-              // HHRecords = HHRecords.concat(records.records);
+              HHRecords = HHRecords.concat(records.records);
 
-              // // Check if there are more records to retrieve
-              // while (records.done === false) {
-              //   // Use queryMore to retrieve additional records
-              //   records = await sf_conn.queryMore(records.nextRecordsUrl);
-              //   HHRecords = HHRecords.concat(records.records);
-              // }
+              // Check if there are more records to retrieve
+              while (records.done === false) {
+                // Use queryMore to retrieve additional records
+                records = await sf_conn.queryMore(records.nextRecordsUrl);
+                HHRecords = HHRecords.concat(records.records);
+              }
+
+              console.log(HHRecords);
 
               // map data and headers for Participant__c
               const participantsHeaders = [
@@ -674,19 +694,28 @@ const ParticipantsResolvers = {
                     formattedRow["Resend_to_OpenFN__c"] = "TRUE";
                     formattedRow["Create_In_CommCare__c"] = "FALSE";
                     formattedRow["Check_Status__c"] = "TRUE";
-                    // formattedRow["Household__c"] = HHRecords.find(
-                    //   (record) =>
-                    //     record.Household_Number__c ===
-                    //     values[header.indexOf("Household_Number__c")]
-                    // ).Id;
+                    formattedRow["Household__c"] = null; // Default value if no match is found
+
+                    const matchingHHRecord = HHRecords.find(
+                      (record) =>
+                        record.Household_Number__c ===
+                        values[header.indexOf("Household_Number__c")].trim()
+                    );
+
+                    if (matchingHHRecord) {
+                      formattedRow["Household__c"] = matchingHHRecord.Id;
+                    } else {
+                      console.warn(
+                        `No matching Household record found for Household_Number__c: ${
+                          values[header.indexOf("Household_Number__c")]
+                        }`
+                      );
+                    }
                   }
 
                   return formattedRow;
                 }
               });
-
-              console.log("Participants to insert", formattedPartsData.length);
-              console.log("Participants sample", formattedPartsData.slice(45));
 
               // insert res.id to Household__c field in participantsData
               const participantsData = formattedPartsData
@@ -872,8 +901,10 @@ const ParticipantsResolvers = {
           console.log(streamResult);
 
           return {
-            message: "Failed to upload new participants 1",
-            status: 500,
+            message: streamResult.message
+              ? streamResult.message
+              : "Failed to upload new participants 1",
+            status: streamResult.status ? streamResult.status : 500,
           };
         } catch (error) {
           // console.error(error);
