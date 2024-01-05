@@ -302,19 +302,14 @@ const ParticipantsResolvers = {
 
             console.log("Begin updating the attendane...");
 
-            // const attendance = await updateAttendance(rows, sf_conn);
+            const attendance = await updateAttendance(rows, sf_conn);
 
-            // if (attendance.status !== 200) {
-            //   return reject({
-            //     message: attendance.message,
-            //     status: attendance.status,
-            //   });
-            // }
-
-            // return reject({
-            //   message: "END OF PROGRAM",
-            //   status: 500,
-            // });
+            if (attendance.status !== 200) {
+              return reject({
+                message: attendance.message,
+                status: attendance.status,
+              });
+            }
 
             // console.log(attendance);
             console.log("Done updating the attendance...");
@@ -698,8 +693,11 @@ const ParticipantsResolvers = {
 
                     const matchingHHRecord = HHRecords.find(
                       (record) =>
-                        record.Household_Number__c ===
-                        values[header.indexOf("Household_Number__c")].trim()
+                        parseInt(record.Household_Number__c, 10) ===
+                        parseInt(
+                          values[header.indexOf("Household_Number__c")].trim(),
+                          10
+                        )
                     );
 
                     if (matchingHHRecord) {
