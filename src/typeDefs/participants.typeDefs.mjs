@@ -15,7 +15,7 @@ const ParticipantsTypeDefs = gql`
     ffg_id: String!
     location: String!
     tns_id: String!
-    status: String!
+    status: String
     farmer_trainer: String!
     business_advisor: String!
     project_name: String!
