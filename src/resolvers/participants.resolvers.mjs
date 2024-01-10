@@ -300,19 +300,19 @@ const ParticipantsResolvers = {
               }
             });
 
-            console.log("Begin updating the attendane...");
+            // console.log("Begin updating the attendane...");
 
-            const attendance = await updateAttendance(rows, sf_conn);
+            // const attendance = await updateAttendance(rows, sf_conn);
 
-            if (attendance.status !== 200) {
-              return reject({
-                message: attendance.message,
-                status: attendance.status,
-              });
-            }
+            // if (attendance.status !== 200) {
+            //   return reject({
+            //     message: attendance.message,
+            //     status: attendance.status,
+            //   });
+            // }
 
-            // console.log(attendance);
-            console.log("Done updating the attendance...");
+            // // console.log(attendance);
+            // console.log("Done updating the attendance...");
 
             // Get the indexes of the required columns
             const requiredColumns = [
@@ -380,6 +380,8 @@ const ParticipantsResolvers = {
                 return acc;
               }, {});
 
+            console.log(groupedData);
+
             const groupedDataArray = Object.values(groupedData);
 
             const finalFormattedHHData = groupedDataArray
@@ -396,7 +398,7 @@ const ParticipantsResolvers = {
                 } else {
                   //console.log("HOUSEHOLD PRIME MISSING", group);
                   return {
-                    message: `Household ${group[0].Household_Number__c} does not have a primary member.`,
+                    message: `Household: ${group[0].Household_Number__c} FFG: ${group[0].ffg_id} does not have a primary member.`,
                     status: 500,
                   };
                 }
@@ -1079,7 +1081,7 @@ const updateAttendance = async (rows, sf_conn) => {
         const farmerId = filteredColumns[farmerIdIndex][j - 1];
 
         if (attendanceValue !== "") {
-          const query = `SELECT Id FROM ${sObject} WHERE Participant__c = '${farmerId}' AND Training_Session__r.Training_Module__c = '${moduleId}' LIMIT 1`;
+          const query = `SELECT Id, Status__c FROM ${sObject} WHERE Participant__c = '${farmerId}' AND Training_Session__r.Training_Module__c = '${moduleId}' LIMIT 1`;
 
           const result = await sf_conn.query(query);
 
