@@ -12,10 +12,11 @@ const sequelize = new Sequelize(
     dialect: "postgres",
     protocol: "postgres",
     dialectOptions: {
-      ssl: {
-        require: true,
-        rejectUnauthorized: false,
-      },
+      // ssl: {
+      //   require: true,
+      //   rejectUnauthorized: false,
+      // },
+      ssl: false,
       native: true,
     },
   }
