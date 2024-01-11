@@ -24,6 +24,7 @@ const ParticipantsTypeDefs = gql`
     primary_household_member: String
     create_in_commcare: String!
     coop_membership_number: String
+    phone_number: String
   }
 
   type Query {
