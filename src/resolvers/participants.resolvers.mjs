@@ -106,7 +106,7 @@ const ParticipantsResolvers = {
                 participant.Primary_Household_Member__c == "Yes" ? 1 : 2,
               create_in_commcare: participant.Create_In_CommCare__c,
               coop_membership_number: participant.Other_ID_Number__c,
-              phone_number: Phone_Number__c
+              phone_number: participant.Phone_Number__c
             };
           }),
         };
