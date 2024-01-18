@@ -55,7 +55,7 @@ const FVQAsResolvers = {
               },
               {
                 practice_name: "Pruning",
-                questions: [],
+                questions: ["Pruning Methods used"],
                 answers: [],
               },
               {
