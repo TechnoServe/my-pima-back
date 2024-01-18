@@ -12,7 +12,7 @@ const ParticipantsTypeDefs = gql`
     age: String
     coffee_tree_numbers: String
     hh_number: String
-    ffg_id: String!
+    ffg_id: String
     location: String!
     tns_id: String!
     status: String!
