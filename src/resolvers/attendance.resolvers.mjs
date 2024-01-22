@@ -3,32 +3,21 @@ const AttendanceResolvers = {
     getAttendances: async (_, { project_id }, { sf_conn }) => {
       try {
         const records = [];
-        let done = false;
-        let queryResult = null;
 
-        const query =
+        let result = await sf_conn.query(
           "SELECT Id, Name, Participant__c, Participant_Gender__c, Attended__c, Training_Session__c, Date__c, Training_Session__r.Training_Module__r.Module_Title__c, Training_Session__r.Training_Module__r.Module_Number__c, Training_Session__r.Training_Module__c FROM Attendance__c WHERE Training_Session__r.Training_Group__r.Project__c = '" +
-          project_id +
-          "'";
+            project_id +
+            "'"
+        );
 
-        do {
-          // Initial query or queryMore
-          const result = queryResult
-            ? await sf_conn.queryMore({
-                queryLocator: queryResult.nextRecordsUrl,
-              })
-            : await sf_conn.query({ query });
+        records = records.concat(result.records);
 
-          // Collect records
-          records.push(...result.records);
-
-          // Check if there are more records
-          if (result.done) {
-            done = true;
-          } else {
-            queryResult = result;
-          }
-        } while (!done);
+        // Check if there are more records to retrieve
+        while (result.done === false) {
+          // Use queryMore to retrieve additional records
+          result = await sf_conn.queryMore(result.nextRecordsUrl);
+          records = records.concat(result.records);
+        }
 
         if (records.length === 0) {
           return {
