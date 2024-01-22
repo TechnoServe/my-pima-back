@@ -2,7 +2,7 @@ const AttendanceResolvers = {
   Query: {
     getAttendances: async (_, { project_id }, { sf_conn }) => {
       try {
-        const records = [];
+        let records = [];
 
         let result = await sf_conn.query(
           "SELECT Id, Name, Participant__c, Participant_Gender__c, Attended__c, Training_Session__c, Date__c, Training_Session__r.Training_Module__r.Module_Title__c, Training_Session__r.Training_Module__r.Module_Number__c, Training_Session__r.Training_Module__c FROM Attendance__c WHERE Training_Session__r.Training_Group__r.Project__c = '" +
