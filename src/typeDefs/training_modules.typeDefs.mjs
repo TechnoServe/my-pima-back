@@ -9,7 +9,7 @@ const TrainingModulesTypeDefs = gql`
     tm_title: String!
     tm_module_number: Int!
     tm_project: String!
-    tm_status: String!
+    tm_status: String
     tm_is_current: Boolean!
     tm_date: String
   }
