@@ -49,7 +49,8 @@ const TrainingModulesResolvers = {
           "SELECT Id, Current_Training_Module__c, Current_Previous_Module__c, Date__c, " +
             "Module_Number__c, Module_Status__c, Module_Title__c, Project__c, Name FROM Training_Module__c " +
             "WHERE Project__c = '" +
-            project_id + ""
+            project_id +
+            "'"
         );
 
         if (training_modules.totalSize === 0) {
