@@ -3,7 +3,7 @@ const TrainingModulesResolvers = {
     getAllTrainingModules: async (_, __, { sf_conn }) => {
       try {
         const training_modules = await sf_conn.query(
-          "SELECT Id, Current_Training_Module__c, Current_Previous_Module__c," +
+          "SELECT Id, Current_Training_Module__c, Current_Previous_Module__c, " +
             "Date__c, Module_Number__c, Module_Status__c, Module_Title__c, Project__c, Name " +
             "FROM Training_Module__c"
         );
@@ -47,7 +47,7 @@ const TrainingModulesResolvers = {
       try {
         const training_modules = await sf_conn.query(
           "SELECT Id, Current_Training_Module__c, Current_Previous_Module__c, Date__c, " +
-            "Module_Number__c, Module_Status__c, Module_Title__c, Project__c, Name FROM Training_Module__c" +
+            "Module_Number__c, Module_Status__c, Module_Title__c, Project__c, Name FROM Training_Module__c " +
             "WHERE Project__c = '" +
             project_id
         );
