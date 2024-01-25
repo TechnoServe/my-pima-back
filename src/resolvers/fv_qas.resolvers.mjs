@@ -85,7 +85,7 @@ const FVQAsResolvers = {
               {
                 practice_name: "Pruning",
                 questions: ["Pruning Methods used"],
-                answers: [getFVMethods("Pruning", bp.Id)],
+                answers: [getFVMethods("Pruning", bp.Id, sf_conn)],
               },
               {
                 practice_name: "Main Stems",
@@ -146,7 +146,7 @@ const FVQAsResolvers = {
                   "Status of the photo",
                 ],
                 answers: [
-                  await getFVMethods("Erosion Control", bp.Id),
+                  await getFVMethods("Erosion Control", bp.Id, sf_conn),
                   await fetchImage(bp.take_a_photo_of_erosion_control__c),
                   !bp.Erosion_Control_Photo_Status__c
                     ? "not_verified"
@@ -233,7 +233,7 @@ const FVQAsResolvers = {
   },
 };
 
-const getFVMethods = async (fvMethod, bpId) => {
+const getFVMethods = async (fvMethod, bpId, sf_conn) => {
   try {
     // check if training group exists by tg_id
     const bpResults = await sf_conn.query(
