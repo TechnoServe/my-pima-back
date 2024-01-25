@@ -250,8 +250,7 @@ const getFVMethods = async (fvMethod, bpId, sf_conn) => {
 
     // Wrap the HTML-formatted text with <ul> (unordered list) tags
     const finalHTML = `<ul>${htmlFormattedText}</ul>`;
-
-    return finalHTML;
+    return <div dangerouslySetInnerHTML={{ __html: finalHTML }} />;
   } catch (error) {
     console.log(error);
 
