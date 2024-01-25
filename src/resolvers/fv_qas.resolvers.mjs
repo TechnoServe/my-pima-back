@@ -17,7 +17,19 @@ const FVQAsResolvers = {
         }
 
         const fvQAs = await sf_conn.query(
-          "SELECT Id, Name, Best_Practice_Adoption__c, Farm_Visit__c, number_of_main_stems_on_majority_trees__c, photo_of_trees_and_average_main_stems__c, Main_Stems_Photo_Status__c, health_of_new_planting_choice__c, Color_of_coffee_tree_leaves__c, how_many_weeds_under_canopy_and_how_big__c, photo_of_weeds_under_the_canopy__c, Weeds_Under_Canopy_Photo_Status__c, take_a_photo_of_erosion_control__c, Erosion_Control_Photo_Status__c, level_of_shade_present_on_the_farm__c, photo_of_level_of_shade_on_the_plot__c, Level_Of_Shade_Plot_Photo_Status__c, planted_intercrop_bananas__c, photograph_intercrop_bananas__c, Intercrop_Bananas_Photo_Status__c, do_you_have_a_record_book__c, are_there_records_on_the_record_book__c, take_a_photo_of_the_record_book__c, Record_Book_Photo_Status__c, do_you_have_compost_manure__c, photo_of_the_compost_manure__c, Compost_Manure_Photo_Status__c FROM FV_Best_Practices__c WHERE Farm_Visit__c='" +
+          "SELECT Id, Name, Best_Practice_Adoption__c, Farm_Visit__c," +
+            "number_of_main_stems_on_majority_trees__c, photo_of_trees_and_average_main_stems__c," +
+            "Main_Stems_Photo_Status__c, health_of_new_planting_choice__c, Color_of_coffee_tree_leaves__c," +
+            "how_many_weeds_under_canopy_and_how_big__c, photo_of_weeds_under_the_canopy__c, " +
+            "Weeds_Under_Canopy_Photo_Status__c, take_a_photo_of_erosion_control__c," +
+            "Erosion_Control_Photo_Status__c, level_of_shade_present_on_the_farm__c, " +
+            "photo_of_level_of_shade_on_the_plot__c, Level_Of_Shade_Plot_Photo_Status__c, " +
+            "planted_intercrop_bananas__c, photograph_intercrop_bananas__c, Intercrop_Bananas_Photo_Status__c," +
+            " do_you_have_a_record_book__c, are_there_records_on_the_record_book__c, " +
+            "take_a_photo_of_the_record_book__c, Record_Book_Photo_Status__c, " +
+            "Do_you_have_compost_manure__c, photo_of_the_compost_manure__c, Compost_Manure_Photo_Status__c " +
+            " FROM FV_Best_Practices__c " +
+            " WHERE Farm_Visit__c='" +
             fv_id +
             "'"
         );
@@ -38,6 +50,21 @@ const FVQAsResolvers = {
             bp_id: bp.Id,
             fv_id: bp.Farm_Visit__c,
             qas: [
+              {
+                practice_name: "Compost",
+                questions: [
+                  "Do you have compost manure?",
+                  "Take a photo of the compost manure",
+                  "Status of the photo",
+                ],
+                answers: [
+                  bp.Do_you_have_compost_manure__c,
+                  await fetchImage(bp.photo_of_the_compost_manure__c),
+                  !bp.Compost_Manure_Photo_Status__c
+                    ? "not_verified"
+                    : bp.Compost_Manure_Photo_Status__c,
+                ],
+              },
               {
                 practice_name: "Main Stems",
                 questions: [
@@ -138,22 +165,7 @@ const FVQAsResolvers = {
                     ? "not_verified"
                     : bp.Record_Book_Photo_Status__c,
                 ],
-              },
-              {
-                practice_name: "Compost",
-                questions: [
-                  "Do you have compost manure?",
-                  "Take a photo of the compost manure",
-                  "Status of the photo",
-                ],
-                answers: [
-                  bp.do_you_have_compost_manure__c,
-                  await fetchImage(bp.photo_of_the_compost_manure__c),
-                  !bp.Compost_Manure_Photo_Status__c
-                    ? "not_verified"
-                    : bp.Compost_Manure_Photo_Status__c,
-                ],
-              },
+              }
             ],
           },
         };
