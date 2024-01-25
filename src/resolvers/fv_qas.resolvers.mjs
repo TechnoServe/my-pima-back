@@ -51,6 +51,7 @@ const FVQAsResolvers = {
             fv_id: bp.Farm_Visit__c,
             qas: [
               {
+                practice_name_id: "Compost",
                 practice_name: "Compost",
                 questions: [
                   "Do you have compost manure?",
@@ -66,6 +67,7 @@ const FVQAsResolvers = {
                 ],
               },
               {
+                practice_name_id: "RecordBook",
                 practice_name: "Record Book",
                 questions: [
                   "Do you have a record book?",
@@ -83,65 +85,10 @@ const FVQAsResolvers = {
                 ],
               },
               {
-                practice_name: "Pruning",
-                questions: ["Pruning Methods used"],
-                answers: [getFVMethods("Pruning", bp.Id, sf_conn)],
-              },
-              {
-                practice_name: "Main Stems",
-                questions: [
-                  "How many main stems are on the majority of the trees?",
-                  "Take a photo of the trees and average main stems",
-                  "Status of the photo",
-                ],
-                answers: [
-                  bp.number_of_main_stems_on_majority_trees__c,
-                  await fetchImage(bp.photo_of_trees_and_average_main_stems__c),
-                  !bp.Main_Stems_Photo_Status__c
-                    ? "not_verified"
-                    : bp.Main_Stems_Photo_Status__c,
-                ],
-              },
-              {
-                practice_name: "Health of New Planting",
-                questions: [
-                  "What is the health of the new planting choice?",
-                  "What is the color of the coffee tree leaves?",
-                ],
-                answers: [
-                  bp.health_of_new_planting_choice__c,
-                  bp.color_of_coffee_tree_leaves__c,
-                ],
-              },
-              {
-                practice_name: "Nutrition",
-                questions: [],
-                answers: [],
-              },
-              {
-                practice_name: "Weeding",
-                questions: [
-                  "How many weeds are under the canopy and how big are they?",
-                  "Take a photo of the weeds under the canopy",
-                  "Status of the photo",
-                ],
-                answers: [
-                  bp.how_many_weeds_under_canopy_and_how_big__c,
-                  await fetchImage(bp.photo_of_weeds_under_the_canopy__c),
-                  !bp.Weeds_Under_Canopy_Photo_Status__c
-                    ? "not_verified"
-                    : bp.Weeds_Under_Canopy_Photo_Status__c,
-                ],
-              },
-              {
-                practice_name: "IPDM",
-                questions: [],
-                answers: [],
-              },
-              {
+                practice_name_id: "ErosionControl",
                 practice_name: "Erosion Control",
                 questions: [
-                  "Erosion Controll Methods Seen",
+                  "Erosion Control Methods Seen",
                   "Take a photo of erosion control",
                   "Status of the photo",
                 ],
@@ -154,7 +101,36 @@ const FVQAsResolvers = {
                 ],
               },
               {
-                practice_name: "Shade",
+                practice_name_id: "IPDM",
+                practice_name: "IPDM",
+                questions: ["Pest and Disease Management: Methods Used"],
+                answers: [
+                  getFVMethods(
+                    "Management of Coffee Berry Borer (CBB)",
+                    bp.Id,
+                    sf_conn
+                  ),
+                ],
+              },
+              {
+                practice_name_id: "Nutrition",
+                practice_name: "Nutrition",
+                questions: [
+                  "Colour of the coffee  leaves in the field",
+                  "Chemicals and Fertilizers Applied",
+                ],
+                answers: [
+                  bp.Color_of_coffee_tree_leaves__c,
+                  getFVMethods(
+                    "Chemicals and Fertilizers Applied",
+                    bp.Id,
+                    sf_conn
+                  ),
+                ],
+              },
+              {
+                practice_name_id: "Shade",
+                practice_name: "Shade Management",
                 questions: [
                   "What is the level of shade present on the farm?",
                   "Take a photo of the level of shade on the plot",
@@ -166,6 +142,97 @@ const FVQAsResolvers = {
                   !bp.Level_Of_Shade_Plot_Photo_Status__c
                     ? "not_verified"
                     : bp.Level_Of_Shade_Plot_Photo_Status__c,
+                ],
+              },
+              {
+                practice_name_id: "Weeding",
+                practice_name: "Weeding",
+                questions: [
+                  "Has the coffee field been dug, including under the canopy?",
+                  "How many weeds are under the canopy and how big are they?",
+                  "Take a photo of the weeds under the canopy",
+                  "Status of the photo",
+                ],
+                answers: [
+                  bp.has_coffee_field_been_dug__c,
+                  bp.how_many_weeds_under_canopy_and_how_big__c,
+                  await fetchImage(bp.photo_of_weeds_under_the_canopy__c),
+                  !bp.Weeds_Under_Canopy_Photo_Status__c
+                    ? "not_verified"
+                    : bp.Weeds_Under_Canopy_Photo_Status__c,
+                ],
+              },
+              {
+                practice_name_id: "Stumping",
+                practice_name: "Stumping",
+                questions: [
+                  "Has the farmer stumped any coffee trees in the field visited since training started?",
+                  "Which year did you stump some trees in this field?",
+                  "On average, how many main stems are on the stumped trees?",
+                  "Status of the photo",
+                ],
+                answers: [
+                  bp.how_many_weeds_under_canopy_and_how_big__c,
+                  bp.year_stumping__c,
+                  bp.main_stems_in_majority_coffee_trees__c,
+                  await fetchImage(bp.photos_of_stumped_coffee_trees__c),
+                  !bp.Stumping_Photo_Status__c
+                    ? "not_verified"
+                    : bp.Stumping_Photo_Status__c,
+                ],
+              },
+              // {
+              //   practice_name_id: "SuckerSelection",
+              //   practice_name: "Sucker Selection",
+              //   questions: [
+              //     "Has the farmer stumped any coffee trees in the field visited since training started?",
+              //     "Which year did you stump some trees in this field?",
+              //     "On average, how many main stems are on the stumped trees?",
+              //     "Status of the photo",
+              //   ],
+              //   answers: [
+              //     bp.how_many_weeds_under_canopy_and_how_big__c,
+              //     bp.year_stumping__c,
+              //     bp.main_stems_in_majority_coffee_trees__c,
+              //     await fetchImage(bp.photos_of_stumped_coffee_trees__c),
+              //     !bp.Stumping_Photo_Status__c
+              //       ? "not_verified"
+              //       : bp.Stumping_Photo_Status__c,
+              //   ],
+              // },
+              {
+                practice_name_id: "Pruning",
+                practice_name: "Pruning",
+                questions: ["Pruning Methods used"],
+                answers: [getFVMethods("Pruning", bp.Id, sf_conn)],
+              },
+
+              {
+                practice_name_id: "HealthofNewPlanting",
+                practice_name: "Health of New Planting",
+                questions: [
+                  "What is the health of the new planting choice?",
+                  "What is the color of the coffee tree leaves?",
+                ],
+                answers: [
+                  bp.health_of_new_planting_choice__c,
+                  bp.color_of_coffee_tree_leaves__c,
+                ],
+              },
+              {
+                practice_name_id: "MainStems",
+                practice_name: "Main Stems",
+                questions: [
+                  "How many main stems are on the majority of the trees?",
+                  "Take a photo of the trees and average main stems",
+                  "Status of the photo",
+                ],
+                answers: [
+                  bp.number_of_main_stems_on_majority_trees__c,
+                  await fetchImage(bp.photo_of_trees_and_average_main_stems__c),
+                  !bp.Main_Stems_Photo_Status__c
+                    ? "not_verified"
+                    : bp.Main_Stems_Photo_Status__c,
                 ],
               },
             ],
@@ -200,6 +267,7 @@ const FVQAsResolvers = {
         Shade: "Level_Of_Shade_Plot_Photo_Status__c",
         RecordBook: "Record_Book_Photo_Status__c",
         Compost: "Compost_Manure_Photo_Status__c",
+        Stumping: "Stumping_Photo_Status__c",
       };
 
       try {
@@ -249,8 +317,7 @@ const getFVMethods = async (fvMethod, bpId, sf_conn) => {
       .join("\n");
 
     // Wrap the HTML-formatted text with <ul> (unordered list) tags
-    const finalHTML = `<ul>${htmlFormattedText}</ul>`;
-    return <div dangerouslySetInnerHTML={{ __html: finalHTML }} />;
+    return `<ul>${htmlFormattedText}</ul>`;
   } catch (error) {
     console.log(error);
 

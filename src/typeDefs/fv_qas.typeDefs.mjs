@@ -26,6 +26,7 @@ const FVQAsTypeDefs = gql`
   }
 
   type QA {
+    practice_name_id
     practice_name: String!
     questions: [String]
     answers: [String]
