@@ -5,6 +5,7 @@ const TrainingGroupsTypeDefs = gql`
     tg_id: ID!
     tg_name: String!
     tns_id: String
+    total_households: Int
     total_participants: Int
     farmer_trainer: String!
     business_advisor: String
