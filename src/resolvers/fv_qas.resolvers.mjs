@@ -237,7 +237,7 @@ const getFVMethods = async (fvMethod, bpId, sf_conn) => {
   try {
     // check if training group exists by tg_id
     const bpResults = await sf_conn.query(
-      `SELECT Id, Best_Practice_Result_Description__c FROM Farm_Visit__c 
+      `SELECT Id, Best_Practice_Result_Description__c FROM FV_Best_Practice_Results__c 
       WHERE FV_Best_Practices__c = '${bpId}' AND Best_Practice_Result_Type__c = '${fvMethod}'`
     );
 
