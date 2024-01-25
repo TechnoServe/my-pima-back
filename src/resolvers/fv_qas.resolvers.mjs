@@ -66,6 +66,28 @@ const FVQAsResolvers = {
                 ],
               },
               {
+                practice_name: "Record Book",
+                questions: [
+                  "Do you have a record book?",
+                  "Are there records on the record book?",
+                  "Take a photo of the record book",
+                  "Status of the photo",
+                ],
+                answers: [
+                  bp.do_you_have_a_record_book__c,
+                  bp.are_there_records_on_the_record_book__c,
+                  await fetchImage(bp.take_a_photo_of_the_record_book__c),
+                  !bp.Record_Book_Photo_Status__c
+                    ? "not_verified"
+                    : bp.Record_Book_Photo_Status__c,
+                ],
+              },
+              {
+                practice_name: "Pruning",
+                questions: ["Pruning Methods used"],
+                answers: [getFVMethods("Pruning", bp.Id)],
+              },
+              {
                 practice_name: "Main Stems",
                 questions: [
                   "How many main stems are on the majority of the trees?",
@@ -79,11 +101,6 @@ const FVQAsResolvers = {
                     ? "not_verified"
                     : bp.Main_Stems_Photo_Status__c,
                 ],
-              },
-              {
-                practice_name: "Pruning",
-                questions: ["Pruning Methods used"],
-                answers: [],
               },
               {
                 practice_name: "Health of New Planting",
@@ -124,10 +141,12 @@ const FVQAsResolvers = {
               {
                 practice_name: "Erosion Control",
                 questions: [
+                  "Erosion Controll Methods Seen",
                   "Take a photo of erosion control",
                   "Status of the photo",
                 ],
                 answers: [
+                  await getFVMethods("Erosion Control", bp.Id),
                   await fetchImage(bp.take_a_photo_of_erosion_control__c),
                   !bp.Erosion_Control_Photo_Status__c
                     ? "not_verified"
@@ -149,23 +168,6 @@ const FVQAsResolvers = {
                     : bp.Level_Of_Shade_Plot_Photo_Status__c,
                 ],
               },
-              {
-                practice_name: "Record Book",
-                questions: [
-                  "Do you have a record book?",
-                  "Are there records on the record book?",
-                  "Take a photo of the record book",
-                  "Status of the photo",
-                ],
-                answers: [
-                  bp.do_you_have_a_record_book__c,
-                  bp.are_there_records_on_the_record_book__c,
-                  await fetchImage(bp.take_a_photo_of_the_record_book__c),
-                  !bp.Record_Book_Photo_Status__c
-                    ? "not_verified"
-                    : bp.Record_Book_Photo_Status__c,
-                ],
-              }
             ],
           },
         };
@@ -229,6 +231,35 @@ const FVQAsResolvers = {
       }
     },
   },
+};
+
+const getFVMethods = async (fvMethod, bpId) => {
+  try {
+    // check if training group exists by tg_id
+    const bpResults = await sf_conn.query(
+      `SELECT Id, Best_Practice_Result_Description__c FROM Farm_Visit__c 
+      WHERE FV_Best_Practices__c = '${bpId}' AND Best_Practice_Result_Type__c = '${fvMethod}'`
+    );
+
+    // Loop through bpResults and create an HTML-formatted string
+    const htmlFormattedText = bpResults.records
+      .map((bpResult) => {
+        return `<li>${bpResult.Best_Practice_Result_Description__c}</li>`;
+      })
+      .join("\n");
+
+    // Wrap the HTML-formatted text with <ul> (unordered list) tags
+    const finalHTML = `<ul>${htmlFormattedText}</ul>`;
+
+    return finalHTML;
+  } catch (error) {
+    console.log(error);
+
+    return {
+      message: error.message,
+      status: error.status,
+    };
+  }
 };
 
 export default FVQAsResolvers;
