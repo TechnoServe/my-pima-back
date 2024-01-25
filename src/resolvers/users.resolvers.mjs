@@ -189,7 +189,7 @@ const UsersResolvers = {
       // check if user email or mobile no already exists
       const user = await Users.findOne({
         where: {
-          [Op.or]: [{ user_email }, { mobile_no }],
+          [Op.or]: [{ user_email }],
         },
       });
 
