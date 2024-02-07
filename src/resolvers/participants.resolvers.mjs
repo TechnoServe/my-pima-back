@@ -1014,6 +1014,7 @@ const ParticipantsResolvers = {
           sf_conn
             .sobject("Participant__c")
             .update(participants, (updateErr, updateResult) => {
+              console.log(updateErr)
               if (updateResult) {
                 reject({ status: 500 });
               } else {
