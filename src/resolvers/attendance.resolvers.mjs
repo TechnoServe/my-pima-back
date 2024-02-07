@@ -2,11 +2,24 @@ const AttendanceResolvers = {
   Query: {
     getAttendances: async (_, { project_id }, { sf_conn }) => {
       try {
-        const attendance = await sf_conn.query(
-          "SELECT Id, Name, Participant__c, Participant_Gender__c, Attended__c, Training_Session__c, Date__c, Training_Session__r.Training_Module__r.Module_Title__c, Training_Session__r.Training_Module__r.Module_Number__c, Training_Session__r.Training_Module__c FROM Attendance__c WHERE Training_Session__r.Training_Group__r.Project__c = '" + project_id+ "'"
+        let records = [];
+
+        let result = await sf_conn.query(
+          "SELECT Id, Name, Participant__c, Participant_Gender__c, Attended__c, Training_Session__c, Date__c, Training_Session__r.Training_Module__r.Module_Title__c, Training_Session__r.Training_Module__r.Module_Number__c, Training_Session__r.Training_Module__c FROM Attendance__c WHERE Training_Session__r.Training_Group__r.Project__c = '" +
+            project_id +
+            "'"
         );
 
-        if (attendance.totalSize === 0) {
+        records = records.concat(result.records);
+
+        // Check if there are more records to retrieve
+        while (result.done === false) {
+          // Use queryMore to retrieve additional records
+          result = await sf_conn.queryMore(result.nextRecordsUrl);
+          records = records.concat(result.records);
+        }
+
+        if (records.length === 0) {
           return {
             message: "Attendance not found",
             status: 404,
@@ -16,7 +29,7 @@ const AttendanceResolvers = {
         return {
           message: "Attendance fetched successfully",
           status: 200,
-          attendance: attendance.records.map((attendance) => {
+          attendance: records.map((attendance) => {
             return {
               attendance_id: attendance.Id,
               attendance_name: attendance.Name,
@@ -25,9 +38,13 @@ const AttendanceResolvers = {
               attendance_status:
                 attendance.Attended__c === 1 ? "Present" : "Absent",
               session_id: attendance.Training_Session__c,
-              module_name: attendance.Training_Session__r.Training_Module__r.Module_Title__c,
-              module_number: attendance.Training_Session__r.Training_Module__r.Module_Number__c,
-              module_id: attendance.Training_Session__r.Training_Module__c
+              module_name:
+                attendance.Training_Session__r.Training_Module__r
+                  .Module_Title__c,
+              module_number:
+                attendance.Training_Session__r.Training_Module__r
+                  .Module_Number__c,
+              module_id: attendance.Training_Session__r.Training_Module__c,
             };
           }),
         };

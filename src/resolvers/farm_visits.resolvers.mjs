@@ -31,13 +31,24 @@ const FarmVisitsResolvers = {
 
         const tg_ids = groups.records.map((group) => group.Id);
 
-        const farmVisits = await sf_conn.query(
+        let farmVisits = [];
+
+        let result = await sf_conn.query(
           "SELECT Id, Name, Training_Group__r.Name, Training_Group__r.TNS_Id__c, Training_Session__r.Name, Farm_Visited__r.Name, Household_PIMA_ID__c, Farmer_Trainer__r.Name, Visit_Has_Training__c, Date_Visited__c FROM Farm_Visit__c WHERE Training_Group__c IN ('" +
             tg_ids.join("','") +
             "')"
         );
 
-        if (farmVisits.totalSize === 0) {
+        farmVisits = farmVisits.concat(result.records);
+
+        // Check if there are more records to retrieve
+        while (result.done === false) {
+          // Use queryMore to retrieve additional records
+          result = await sf_conn.queryMore(result.nextRecordsUrl);
+          farmVisits = farmVisits.concat(result.records);
+        }
+
+        if (farmVisits.length === 0) {
           return {
             message: "Farm Visits not found",
             status: 404,
@@ -47,7 +58,7 @@ const FarmVisitsResolvers = {
         return {
           message: "Farm Visits fetched successfully",
           status: 200,
-          farmVisits: farmVisits.records.map(async (fv) => {
+          farmVisits: farmVisits.map(async (fv) => {
             return {
               fv_id: fv.Id,
               fv_name: fv.Name,
