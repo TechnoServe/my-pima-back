@@ -1007,7 +1007,7 @@ const ParticipantsResolvers = {
           };
         });
 
-        console.log(participants);
+        //console.log(participants);
 
         // Use Promise to handle the update operation
         const updateResult = await new Promise((resolve, reject) => {
@@ -1039,6 +1039,8 @@ const ParticipantsResolvers = {
             return;
           }
         }
+
+        console.log(updateResult)
 
         resolve({
           message: "Failed to syncing participants",
