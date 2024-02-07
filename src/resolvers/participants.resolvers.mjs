@@ -1007,14 +1007,19 @@ const ParticipantsResolvers = {
               };
           });
   
-          // Process participants in batches of 200
+          // Split participants into chunks
           const batchSize = 200;
+          const participantChunks = [];
           for (let i = 0; i < participants.length; i += batchSize) {
-              const batch = participants.slice(i, i + batchSize);
+              participantChunks.push(participants.slice(i, i + batchSize));
+          }
+  
+          // Process participant chunks in parallel
+          await Promise.all(participantChunks.map(async (chunk) => {
               const updateResult = await new Promise((resolve, reject) => {
                   sf_conn
                       .sobject("Participant__c")
-                      .update(batch, (updateErr, updateResult) => {
+                      .update(chunk, (updateErr, updateResult) => {
                           console.log(updateErr)
                           if (updateErr) {
                               reject({ status: 500 });
@@ -1034,10 +1039,10 @@ const ParticipantsResolvers = {
   
                   if (!success) {
                       console.error("Some records failed to update");
-                      return { message: "Failed to sync participants", status: 500 };
+                      throw new Error("Failed to sync participants");
                   }
               }
-          }
+          }));
   
           console.log("All records updated successfully");
           return { message: "Participants synced successfully", status: 200 };
@@ -1046,6 +1051,7 @@ const ParticipantsResolvers = {
           return { message: "Error syncing participants", status: 500 };
       }
   },
+  
   
   
   },
