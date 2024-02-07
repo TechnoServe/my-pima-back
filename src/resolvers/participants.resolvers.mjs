@@ -1007,40 +1007,46 @@ const ParticipantsResolvers = {
               };
           });
   
-          // Use Bulk API for handling updates
-          const job = sf_conn.bulk.createJob("Participant__c", "update");
-          const batch = job.createBatch();
-          batch.execute(participants);
+          // Process participants in batches of 200
+          const batchSize = 200;
+          for (let i = 0; i < participants.length; i += batchSize) {
+              const batch = participants.slice(i, i + batchSize);
+              const updateResult = await new Promise((resolve, reject) => {
+                  sf_conn
+                      .sobject("Participant__c")
+                      .update(batch, (updateErr, updateResult) => {
+                          console.log(updateErr)
+                          if (updateErr) {
+                              reject({ status: 500 });
+                          } else {
+                              resolve({
+                                  data: updateResult,
+                                  status: 200,
+                              });
+                          }
+                      });
+              });
   
-          // Check batch status periodically
-          let isBatchDone = false;
-          while (!isBatchDone) {
-              const batchInfo = await sf_conn.bulk.query(`SELECT Id, State, JobId FROM AsyncApexJob WHERE Id = '${batch.id}'`);
-              const state = batchInfo.records[0].State;
-              if (state === "Completed" || state === "Failed" || state === "Not Processed") {
-                  isBatchDone = true;
-              } else {
-                  await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait for 5 seconds before checking again
+              if (updateResult.length > 0) {
+                  const success = updateResult.every(
+                      (result) => result.success === true
+                  );
+  
+                  if (!success) {
+                      console.error("Some records failed to update");
+                      return { message: "Failed to sync participants", status: 500 };
+                  }
               }
           }
   
-          // Check batch result
-          const batchResult = await sf_conn.bulk.query(`SELECT Id, Success, Created, Error FROM Participant__c WHERE CreatedById = '${batch.id}'`);
-          const successes = batchResult.records.filter((record) => record.Success === "true").length;
-          const errors = batchResult.records.filter((record) => record.Success === "false").length;
-  
-          if (errors > 0) {
-              console.error("Some records failed to update");
-              return { message: "Failed to sync participants", status: 500 };
-          } else {
-              console.log("All records updated successfully");
-              return { message: "Participants synced successfully", status: 200 };
-          }
+          console.log("All records updated successfully");
+          return { message: "Participants synced successfully", status: 200 };
       } catch (error) {
           console.error(error);
           return { message: "Error syncing participants", status: 500 };
       }
   },
+  
   
   },
 };
