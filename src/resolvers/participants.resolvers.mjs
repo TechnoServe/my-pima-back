@@ -106,7 +106,7 @@ const ParticipantsResolvers = {
                 participant.Primary_Household_Member__c == "Yes" ? 1 : 2,
               create_in_commcare: participant.Create_In_CommCare__c,
               coop_membership_number: participant.Other_ID_Number__c,
-              phone_number: participant.Phone_Number__c
+              phone_number: participant.Phone_Number__c,
             };
           }),
         };
@@ -735,6 +735,10 @@ const ParticipantsResolvers = {
                     formattedRow[column] = value != "null" ? value : "";
                   }
 
+                  formattedRow["TNS_Id__c"] =
+                    values[header.indexOf("ffg_id")].replace(/"/g, "") +
+                    values[header.indexOf("Household_Number__c")].replace(/"/g, "") +
+                    values[header.indexOf("Primary_Household_Member__c")].replace(/"/g, "");
                   formattedRow["Resend_to_OpenFN__c"] = "TRUE";
                   formattedRow["Create_In_CommCare__c"] = "FALSE";
                   formattedRow["Check_Status__c"] = "TRUE";
@@ -963,97 +967,96 @@ const ParticipantsResolvers = {
 
     syncParticipantsWithCOMMCARE: async (_, { project_id }, { sf_conn }) => {
       try {
-          console.log("Start here");
-          // check if project exists by project_id
-          const project = await Projects.findOne({
-              where: { sf_project_id: project_id },
-          });
-  
-          console.log(project);
-  
-          if (!project) {
-              return {
-                  message: "Project not found",
-                  status: 404,
-              };
-          }
-  
-          console.log(project);
-  
-          let participants = [];
-  
-          // Perform the initial query
-          let result = await sf_conn.query(
-              "SELECT Id, Name, Create_In_CommCare__c, Resend_to_OpenFN__c FROM Participant__c WHERE Project__c = '" +
-              project.project_name +
-              "'"
-          );
-  
+        console.log("Start here");
+        // check if project exists by project_id
+        const project = await Projects.findOne({
+          where: { sf_project_id: project_id },
+        });
+
+        console.log(project);
+
+        if (!project) {
+          return {
+            message: "Project not found",
+            status: 404,
+          };
+        }
+
+        console.log(project);
+
+        let participants = [];
+
+        // Perform the initial query
+        let result = await sf_conn.query(
+          "SELECT Id, Name, Create_In_CommCare__c, Resend_to_OpenFN__c FROM Participant__c WHERE Project__c = '" +
+            project.project_name +
+            "'"
+        );
+
+        participants = participants.concat(result.records);
+
+        // Check if there are more records to retrieve
+        while (result.done === false) {
+          // Use queryMore to retrieve additional records
+          result = await sf_conn.queryMore(result.nextRecordsUrl);
           participants = participants.concat(result.records);
-  
-          // Check if there are more records to retrieve
-          while (result.done === false) {
-              // Use queryMore to retrieve additional records
-              result = await sf_conn.queryMore(result.nextRecordsUrl);
-              participants = participants.concat(result.records);
-          }
-  
-          // Update the Create_In_CommCare__c field to TRUE for all participants
-          participants = participants.map((participant) => {
-              return {
-                  Id: participant.Id,
-                  Resend_to_OpenFN__c: false,
-                  Create_In_CommCare__c: true, // Assuming Create_In_CommCare__c is a checkbox
-              };
-          });
-  
-          // Split participants into chunks
-          const batchSize = 200;
-          const participantChunks = [];
-          for (let i = 0; i < participants.length; i += batchSize) {
-              participantChunks.push(participants.slice(i, i + batchSize));
-          }
-  
-          // Process participant chunks in parallel
-          await Promise.all(participantChunks.map(async (chunk) => {
-              const updateResult = await new Promise((resolve, reject) => {
-                  sf_conn
-                      .sobject("Participant__c")
-                      .update(chunk, (updateErr, updateResult) => {
-                          console.log(updateErr)
-                          if (updateErr) {
-                              reject({ status: 500 });
-                          } else {
-                              resolve({
-                                  data: updateResult,
-                                  status: 200,
-                              });
-                          }
-                      });
-              });
-  
-              if (updateResult.length > 0) {
-                  const success = updateResult.every(
-                      (result) => result.success === true
-                  );
-  
-                  if (!success) {
-                      console.error("Some records failed to update");
-                      throw new Error("Failed to sync participants");
+        }
+
+        // Update the Create_In_CommCare__c field to TRUE for all participants
+        participants = participants.map((participant) => {
+          return {
+            Id: participant.Id,
+            Resend_to_OpenFN__c: false,
+            Create_In_CommCare__c: true, // Assuming Create_In_CommCare__c is a checkbox
+          };
+        });
+
+        // Split participants into chunks
+        const batchSize = 200;
+        const participantChunks = [];
+        for (let i = 0; i < participants.length; i += batchSize) {
+          participantChunks.push(participants.slice(i, i + batchSize));
+        }
+
+        // Process participant chunks in parallel
+        await Promise.all(
+          participantChunks.map(async (chunk) => {
+            const updateResult = await new Promise((resolve, reject) => {
+              sf_conn
+                .sobject("Participant__c")
+                .update(chunk, (updateErr, updateResult) => {
+                  console.log(updateErr);
+                  if (updateErr) {
+                    reject({ status: 500 });
+                  } else {
+                    resolve({
+                      data: updateResult,
+                      status: 200,
+                    });
                   }
+                });
+            });
+
+            if (updateResult.length > 0) {
+              const success = updateResult.every(
+                (result) => result.success === true
+              );
+
+              if (!success) {
+                console.error("Some records failed to update");
+                throw new Error("Failed to sync participants");
               }
-          }));
-  
-          console.log("All records updated successfully");
-          return { message: "Participants synced successfully", status: 200 };
+            }
+          })
+        );
+
+        console.log("All records updated successfully");
+        return { message: "Participants synced successfully", status: 200 };
       } catch (error) {
-          console.error(error);
-          return { message: "Error syncing participants", status: 500 };
+        console.error(error);
+        return { message: "Error syncing participants", status: 500 };
       }
-  },
-  
-  
-  
+    },
   },
 };
 
