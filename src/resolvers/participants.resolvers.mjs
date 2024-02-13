@@ -1012,7 +1012,7 @@ const ParticipantsResolvers = {
         });
 
         // Split participants into chunks
-        const batchSize = 99;
+        const batchSize = 50;
         const participantChunks = [];
         for (let i = 0; i < participants.length; i += batchSize) {
           participantChunks.push(participants.slice(i, i + batchSize));
