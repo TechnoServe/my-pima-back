@@ -29,8 +29,8 @@ const ParticipantsResolvers = {
             Project__c, Training_Group__c, Training_Group__r.Responsible_Staff__r.ReportsToId, 
             Household__c, Primary_Household_Member__c, Create_In_CommCare__c, Other_ID_Number__c, 
             Phone_Number__c FROM Participant__c 
-          WHERE Project__c = '${project.project_name}' AND Status__c = 'Active' 
-          ORDER BY Training_Group__c AND Primary_Household_Member__c AND Household__r.Name`
+           WHERE Project__c = '${project.project_name}' AND Status__c = 'Active' 
+          ORDER BY Training_Group__c ASC, Primary_Household_Member__c ASC, Household__r.Name ASC`
         );
 
         participants = participants.concat(result.records);
