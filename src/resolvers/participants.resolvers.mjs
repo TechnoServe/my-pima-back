@@ -30,7 +30,7 @@ const ParticipantsResolvers = {
             Household__c, Primary_Household_Member__c, Create_In_CommCare__c, Other_ID_Number__c, 
             Phone_Number__c FROM Participant__c 
            WHERE Project__c = '${project.project_name}' AND Status__c = 'Active' 
-          ORDER BY TNS_Id__c ASC`
+          ORDER BY TNS_Id__c Asc, Household__r.Name Asc`
         );
 
         participants = participants.concat(result.records);
