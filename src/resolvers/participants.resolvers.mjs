@@ -23,9 +23,14 @@ const ParticipantsResolvers = {
 
         // Perform the initial query
         let result = await sf_conn.query(
-          "SELECT Id, Name, Middle_Name__c, Last_Name__c, Gender__c, Age__c, Household__r.Farm_Size__c, Household__r.Name, Training_Group__r.TNS_Id__c, Training_Group__r.Project_Location__c, TNS_Id__c, Status__c, Trainer_Name__c, Project__c, Training_Group__c, Training_Group__r.Responsible_Staff__r.ReportsToId, Household__c, Primary_Household_Member__c, Create_In_CommCare__c, Other_ID_Number__c, Phone_Number__c FROM Participant__c WHERE Project__c = '" +
-            project.project_name +
-            "' AND Status__c = 'Active'"
+          `SELECT Id, Name, Middle_Name__c, Last_Name__c, Gender__c, Age__c, 
+            Household__r.Farm_Size__c, Household__r.Name, Training_Group__r.TNS_Id__c, 
+            Training_Group__r.Project_Location__c, TNS_Id__c, Status__c, Trainer_Name__c, 
+            Project__c, Training_Group__c, Training_Group__r.Responsible_Staff__r.ReportsToId, 
+            Household__c, Primary_Household_Member__c, Create_In_CommCare__c, Other_ID_Number__c, 
+            Phone_Number__c FROM Participant__c 
+          WHERE Project__c = '${project.project_name}' AND Status__c = 'Active' 
+          ORDER BY Training_Group__c AND Primary_Household_Member__c AND Household__r.Name`
         );
 
         participants = participants.concat(result.records);
