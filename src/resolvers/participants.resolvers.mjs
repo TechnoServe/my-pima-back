@@ -325,9 +325,24 @@ const ParticipantsResolvers = {
                   }
                 });
 
-                formattedRow["Household_Number__c"] = values[
-                  columnIndexMap["Household_Number__c"]
-                ].replace(/"/g, "");
+                // Check if Household_Number__c is less than 10
+                if (
+                  parseInt(values[columnIndexMap["Household_Number__c"]], 10) <
+                  10
+                ) {
+                  // Prepend '0' to formattedRow["Name"]
+                  formattedRow["Name"] =
+                    "0" +
+                    values[columnIndexMap["Household_Number__c"]].replace(
+                      /"/g,
+                      ""
+                    );
+                } else {
+                  // If Household_Number__c is 10 or greater, directly assign the value to formattedRow["Name"]
+                  formattedRow["Name"] = values[
+                    columnIndexMap["Household_Number__c"]
+                  ].replace(/"/g, "");
+                }
                 formattedRow["Name"] = values[
                   columnIndexMap["Household_Number__c"]
                 ].replace(/"/g, "");
@@ -742,8 +757,13 @@ const ParticipantsResolvers = {
 
                   formattedRow["TNS_Id__c"] =
                     values[header.indexOf("ffg_id")].replace(/"/g, "") +
-                    values[header.indexOf("Household_Number__c")].replace(/"/g, "") +
-                    values[header.indexOf("Primary_Household_Member__c")].replace(/"/g, "");
+                    values[header.indexOf("Household_Number__c")].replace(
+                      /"/g,
+                      ""
+                    ) +
+                    values[
+                      header.indexOf("Primary_Household_Member__c")
+                    ].replace(/"/g, "");
                   formattedRow["Resend_to_OpenFN__c"] = "TRUE";
                   formattedRow["Create_In_CommCare__c"] = "FALSE";
                   formattedRow["Check_Status__c"] = "TRUE";

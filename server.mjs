@@ -42,6 +42,7 @@ import FVQAsResolvers from "./src/resolvers/fv_qas.resolvers.mjs";
 import TrainingModulesTypeDefs from "./src/typeDefs/training_modules.typeDefs.mjs";
 import TrainingModulesResolvers from "./src/resolvers/training_modules.resolvers.mjs";
 import PerformanceResolvers from "./src/resolvers/performance.resolvers.mjs";
+import PerformanceTypeDefs from "./src/typeDefs/performance.typeDefs.mjs";
 
 const app = express();
 
@@ -132,7 +133,8 @@ const server = new ApolloServer({
     AttendanceTypeDefs,
     FarmVisitsTypeDefs,
     FVQAsTypeDefs,
-    TrainingModulesTypeDefs
+    TrainingModulesTypeDefs,
+    PerformanceTypeDefs
   ],
   resolvers: [
     PermissionsResolvers,
