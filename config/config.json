@@ -1,13 +1,13 @@
 {
   "development": {
-    "username": "my_pima",
-    "password": "oP53ZnOwnucGTZU4sA6yQfJ0cehqkxZn",
+    "username": "postgres",
+    "password": "1234",
     "database": "my_pima_db",
-    "host": "dpg-ciac8859aq007t81i8n0-a.oregon-postgres.render.com",
+    "host": "localhost",
     "dialect": "postgres",
     "protocol": "postgres",
     "dialectOptions": {
-      "ssl": true,
+      "ssl": false,
       "native": true
     }
   },
