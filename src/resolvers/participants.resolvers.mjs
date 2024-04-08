@@ -636,6 +636,8 @@ const ParticipantsResolvers = {
                 (result) => result.status === 500
               );
 
+              // console.log(failedResults);
+
               return failedResults.length === 0
                 ? {
                     status: 200,
@@ -644,8 +646,7 @@ const ParticipantsResolvers = {
                   }
                 : {
                     status: 500,
-                    message:
-                      "Operation failed while updating households. Please contact the PIMA team.",
+                    message: "System busy please try again.",
                   };
             };
 
@@ -869,8 +870,10 @@ const ParticipantsResolvers = {
                       result.some((r) => r.success === false && r.errors)
                     ) {
                       console.error(`Error ${action}ing records:`);
-                      console.log(result.forEach(result => console.log(result.errors)))
-                      console.log(batch)
+                      console.log(
+                        result.forEach((result) => console.log(result.errors))
+                      );
+                      console.log(batch);
                       return { status: 500, error: result, batch };
                     } else {
                       return { status: 200, data: result, batch };
@@ -894,6 +897,8 @@ const ParticipantsResolvers = {
                 (result) => result.status === 500
               );
 
+              // console.log(failedResults);
+
               return failedResults.length === 0
                 ? {
                     status: 200,
@@ -902,8 +907,9 @@ const ParticipantsResolvers = {
                   }
                 : {
                     status: 500,
-                    message:
-                      "Operation failed while updating participants. Please contact the PIMA team.",
+                    message: "System busy please try again.",
+                    // message:
+                    // "Operation failed while updating participants. Please contact the PIMA team.",
                   };
             };
 
