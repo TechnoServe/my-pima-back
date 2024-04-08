@@ -755,12 +755,29 @@ const ParticipantsResolvers = {
                     formattedRow[column] = value != "null" ? value : "";
                   }
 
+                  let hhNumber = "";
+                  if (
+                    parseInt(
+                      values[header.indexOf("Household_Number__c")],
+                      10
+                    ) < 10
+                  ) {
+                    // Prepend '0' to formattedRow["Name"]
+                    hhNumber =
+                      "0" +
+                      values[header.indexOf("Household_Number__c")].replace(
+                        /"/g,
+                        ""
+                      );
+                  } else {
+                    hhNumber = values[
+                      header.indexOf("Household_Number__c")
+                    ].replace(/"/g, "");
+                  }
+
                   formattedRow["TNS_Id__c"] =
                     values[header.indexOf("ffg_id")].replace(/"/g, "") +
-                    values[header.indexOf("Household_Number__c")].replace(
-                      /"/g,
-                      ""
-                    ) +
+                    hhNumber +
                     values[
                       header.indexOf("Primary_Household_Member__c")
                     ].replace(/"/g, "");
@@ -851,9 +868,9 @@ const ParticipantsResolvers = {
                       Array.isArray(result) &&
                       result.some((r) => r.success === false && r.errors)
                     ) {
-                      //console.error(`Error ${action}ing records:`);
-                      //console.log(result.forEach(result => console.log(result.errors)))
-                      //console.log(batch)
+                      console.error(`Error ${action}ing records:`);
+                      console.log(result.forEach(result => console.log(result.errors)))
+                      console.log(batch)
                       return { status: 500, error: result, batch };
                     } else {
                       return { status: 200, data: result, batch };
@@ -934,7 +951,7 @@ const ParticipantsResolvers = {
             }
 
             resolve({
-              message: "Failed to upload new participants",
+              message: "Failed to upload new participants 1",
               status: 500,
             });
 
@@ -942,13 +959,13 @@ const ParticipantsResolvers = {
             // }
 
             resolve({
-              message: "Failed to upload new participants",
+              message: "Failed to upload new participants 2",
               status: 500,
             });
           });
           stream.on("error", (error) => {
             reject({
-              message: "Failed to upload new participants",
+              message: "Failed to upload new participants 3",
               status: 500,
             });
           });
