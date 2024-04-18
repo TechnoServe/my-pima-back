@@ -243,6 +243,99 @@ const ParticipantsResolvers = {
     uploadParticipants: async (_, { parts_file }, { sf_conn }) => {
       try {
         const obj = await parts_file;
+        const { filename, createReadStream } = obj.file;
+
+        // File Handling
+        const stream = createReadStream();
+        const ext = parse(filename).ext;
+        if (!validateFileType(ext)) {
+          return {
+            message: "File must be a csv",
+            status: 400,
+          };
+        }
+        const fileData = await readFileData(stream);
+
+        // Data Processing
+        console.log("Processing data.................");
+        const formattedHHData = formatHHData(fileData);
+        // console.log("formattedHHData", formattedHHData.slice(0, 1));
+        const groupedHHData = groupDataByHousehold(formattedHHData);
+        console.log("groupedHHData", groupedHHData.slice(0, 2));
+        const trainingGroupsMap = await matchFFGsWithSalesforceIds(
+          sf_conn,
+          groupedHHData
+        );
+
+        // console.log("trainingGroupsMap", trainingGroupsMap);
+        console.log("Updating households.................");
+        const hhResult = await updateHouseholdsInSalesforce(
+          sf_conn,
+          groupedHHData,
+          trainingGroupsMap
+        );
+
+        // query most recent household data after update
+        const recentHHData = await queryRecentHHData(sf_conn, hhResult);
+
+        const formattedPartData = formatParticipantData(
+          fileData,
+          trainingGroupsMap,
+          recentHHData
+        );
+
+        console.log("Updating Participants.................");
+        const partsResult = await updateParticipantsInSalesforce(
+          sf_conn,
+          formattedPartData
+        );
+
+        if (partsResult.status == 200) {
+          console.log("Updating Attendance.................");
+          const attendance = await updateAttendance(fileData, sf_conn);
+
+          // File Writing
+          // const newFilename = await writeUploadedFile(stream, ext);
+
+          if (attendance.status == 200) {
+            return {
+              message: "Participants uploaded successfully",
+              status: 200,
+              //filename: newFilename,
+            };
+          } else {
+            throw {
+              status: attendance.status || 500,
+              message:
+                attendance.message ||
+                "An unkown error occured. Please contact the PIMA team.",
+            };
+          }
+        } else {
+          throw {
+            status: partsResult.status || 500,
+            message:
+              partsResult.message ||
+              "An unkown error occured. Please contact the PIMA team.",
+          };
+        }
+
+        // console.log("hh result", hhResult);
+      } catch (error) {
+        // Log the error
+        console.error("General Error", error);
+
+        // Handle specific error cases
+        return {
+          message: error.message || "Unknow error occured",
+          status: error.status || 500,
+        };
+      }
+    },
+
+    uploadParticipant: async (_, { parts_file }, { sf_conn }) => {
+      try {
+        const obj = await parts_file;
 
         const { filename, createReadStream } = obj.file;
 
@@ -397,18 +490,6 @@ const ParticipantsResolvers = {
             const finalFormattedHHDataFiltered = finalFormattedHHData.filter(
               (entry) => entry.status !== 500
             );
-
-            // Assuming you want to handle the error at this point
-            // const errorGroups = finalFormattedHHData.filter(
-            //   (entry) => entry.status === 500
-            // );
-            // if (errorGroups.length > 0) {
-            //   // console.error("Error in some groups:", errorGroups);
-            //   return resolve({
-            //     status: 400,
-            //     message: errorGroups[0].message,
-            //   });
-            // }
 
             // check training group from formattedPartsData by looping through each row
             // if training group does not exist, return error
@@ -664,310 +745,7 @@ const ParticipantsResolvers = {
               return resolve(hhResult);
             }
 
-            let recentHHsIds = [];
-
-            hhResult.data.forEach((result) =>
-              result.data.forEach((result) => recentHHsIds.push(result.id))
-            );
-
-            const recentHousehoulds = [];
-            for (let i = 0; i < recentHHsIds.length; i += batchSize) {
-              const batch = recentHHsIds.slice(i, i + batchSize);
-              recentHousehoulds.push(batch);
-            }
-
-            const recentHHsQuery = recentHousehoulds.map((batch) => {
-              return sf_conn.query(
-                `SELECT Id, Household_Number__c, training_group__c FROM Household__c WHERE Id IN ('${batch.join(
-                  "','"
-                )}')`
-              );
-            });
-
-            const recentHousehouldsArray = [];
-            await Promise.all(
-              recentHHsQuery.map(async (queryResult) => {
-                const result = await queryResult;
-                recentHousehouldsArray.push(...result.records);
-              })
-            );
-
-            console.log(`Returned ${recentHousehouldsArray.length} Households`);
-            //console.log(recentHousehouldsArray.slice(0, 2));
-
-            // map data and headers for Participant__c
-            const participantsHeaders = [
-              "Name",
-              "Middle_Name__c",
-              "Last_Name__c",
-              "Gender__c",
-              "Age__c",
-              //"Phone_Number__c",
-              "Primary_Household_Member__c",
-              "TNS_Id__c",
-              "Training_Group__c",
-              "Household__c",
-              "Status__c",
-              "Participant__c",
-              "Household_Number__c",
-            ];
-
-            // "Resend_to_OpenFN__c",
-            // "Check_Status__c",
-            // "Create_In_CommCare__c",
-
-            const columnIndexMap2 = participantsHeaders.reduce(
-              (map, column) => {
-                map[column] = header.indexOf(column);
-                return map;
-              },
-              {}
-            );
-
-            const formattedPartsData = rows.slice(1).map((row) => {
-              if (row !== "") {
-                const values = row.split(",");
-                const formattedRow = {};
-
-                for (const column of participantsHeaders) {
-                  const index = columnIndexMap2[column];
-                  formattedRow[column] = values[index];
-
-                  const value = values[index]
-                    ? values[index].replace(/"/g, "")
-                    : "";
-
-                  formattedRow["Training_Group__c"] = trainingGroupsMap.get(
-                    values[header.indexOf("ffg_id")].replace(/"/g, "")
-                  );
-
-                  // Change
-                  if (
-                    column === "Primary_Household_Member__c" &&
-                    value === "1"
-                  ) {
-                    formattedRow[column] = "Yes";
-                  } else if (
-                    column === "Primary_Household_Member__c" &&
-                    value === "2"
-                  ) {
-                    formattedRow[column] = "No";
-                  } else {
-                    formattedRow[column] = value != "null" ? value : "";
-                  }
-
-                  let hhNumber = "";
-                  if (
-                    parseInt(
-                      values[header.indexOf("Household_Number__c")],
-                      10
-                    ) < 10
-                  ) {
-                    // Prepend '0' to formattedRow["Name"]
-                    hhNumber =
-                      "0" +
-                      values[header.indexOf("Household_Number__c")].replace(
-                        /"/g,
-                        ""
-                      );
-                  } else {
-                    hhNumber = values[
-                      header.indexOf("Household_Number__c")
-                    ].replace(/"/g, "");
-                  }
-
-                  formattedRow["TNS_Id__c"] =
-                    values[header.indexOf("ffg_id")].replace(/"/g, "") +
-                    hhNumber +
-                    values[
-                      header.indexOf("Primary_Household_Member__c")
-                    ].replace(/"/g, "");
-                  formattedRow["Resend_to_OpenFN__c"] = "TRUE";
-                  formattedRow["Create_In_CommCare__c"] = "FALSE";
-                  formattedRow["Check_Status__c"] = "TRUE";
-                  // formattedRow["Household__c"] = null; // Default value if no match is found
-                }
-
-                return formattedRow;
-              }
-            });
-
-            // insert res.id to Household__c field in participantsData
-            const participantsData = formattedPartsData
-              .filter((item) => item !== undefined)
-              .map((part, index) => {
-                const matchingHHRecord = recentHousehouldsArray.find(
-                  (record) =>
-                    parseInt(record.Household_Number__c, 10) ===
-                      parseInt(part.Household_Number__c, 10) &&
-                    record.Training_Group__c === part.Training_Group__c
-                );
-
-                let Household = part.Household__c;
-                if (matchingHHRecord) {
-                  Household = matchingHHRecord.Id;
-                }
-                // else {
-                //   return resolve({
-                //     status: 500,
-                //     message: `No matching Household record found for Farmer: ${part.TNS_Id__c}`,
-                //   });
-                // }
-
-                const {
-                  Participant__c,
-                  Household__c,
-                  Household_Number__c,
-                  ...rest
-                } = part;
-
-                return {
-                  ...rest,
-                  Id: Participant__c,
-                  Resend_to_OpenFN__c: true,
-                  Create_In_CommCare__c: false,
-                  Household__c: Household,
-                };
-              });
-
-            const partsResult = async () => {
-              const batchSize = 200;
-              const partsToUpdateInSalesforce = [];
-              const newPartsToInsertInSalesforce = [];
-
-              participantsData.forEach((record) => {
-                if (record.Id) {
-                  record.Resend_to_OpenFN__c = true;
-                  partsToUpdateInSalesforce.push(record);
-                } else {
-                  newPartsToInsertInSalesforce.push(record);
-                }
-              });
-
-              console.log(
-                "partsToUpdateInSalesforce",
-                partsToUpdateInSalesforce.length
-              );
-              console.log(
-                "newPartsToInsertInSalesforce",
-                newPartsToInsertInSalesforce.length
-              );
-
-              const updateBatches = chunkArray(
-                partsToUpdateInSalesforce,
-                batchSize
-              );
-
-              const executeBatchOperation = async (action, batches) => {
-                const promises = batches.map(async (batch) => {
-                  try {
-                    const result = await sf_conn
-                      .sobject("Participant__c")
-                      [action](batch);
-                    // Check for custom error structure in the result
-                    if (
-                      Array.isArray(result) &&
-                      result.some((r) => r.success === false && r.errors)
-                    ) {
-                      console.error(`Error ${action}ing records:`);
-                      console.log(
-                        result.forEach((result) => console.log(result.errors))
-                      );
-                      console.log(batch);
-                      return { status: 500, error: result, batch };
-                    } else {
-                      return { status: 200, data: result, batch };
-                    }
-                  } catch (err) {
-                    //console.error(`Error ${action}ing records:`, err);
-                    return { status: 500, error: err, batch };
-                  }
-                });
-
-                return Promise.all(promises);
-              };
-
-              const updateResults = await executeBatchOperation(
-                "update",
-                updateBatches
-              );
-
-              //return resolve({data: [], status: 400});
-              const failedResults = [...updateResults].filter(
-                (result) => result.status === 500
-              );
-
-              // console.log(failedResults);
-
-              return failedResults.length === 0
-                ? {
-                    status: 200,
-                    message: "All batches were successful!",
-                    data: [...updateResults],
-                  }
-                : {
-                    status: 500,
-                    message: "System busy please try again.",
-                    // message:
-                    // "Operation failed while updating participants. Please contact the PIMA team.",
-                  };
-            };
-
-            const partsData = await partsResult();
-
-            //console.log(partsData);
-
-            // check if every item in partsResult has success:true
-            if (partsData.status == 200) {
-              // const success = partsData.every(
-              //   (result) => result.success === true
-              // );
-
-              //if (success) {
-              // check if uploads folder exists
-              const uploadsFolder = join(
-                getDirName(import.meta.url),
-                "../../uploads"
-              );
-
-              if (!fs.existsSync(uploadsFolder)) {
-                fs.mkdirSync(uploadsFolder);
-              }
-
-              // name file with user_id and date
-              const newFilename = `participants-${Date.now()}${ext}`;
-              stream = createReadStream();
-
-              let serverFile = join(
-                getDirName(import.meta.url),
-                `../../uploads/${newFilename}`
-              );
-
-              let writeStream = createWriteStream(serverFile);
-
-              await stream.pipe(writeStream);
-
-              return resolve({
-                message: "Participants uploaded successfully",
-                status: 200,
-              });
-
-              return;
-              //}
-            }
-
-            resolve({
-              message: "Failed to upload new participants 1",
-              status: 500,
-            });
-
             return;
-            // }
-
-            resolve({
-              message: "Failed to upload new participants 2",
-              status: 500,
-            });
           });
           stream.on("error", (error) => {
             reject({
@@ -1110,47 +888,48 @@ const ParticipantsResolvers = {
 
 // Helper Functions
 
-const updateAttendance = async (rows, sf_conn) => {
+const updateAttendance = async (fileData, sf_conn) => {
   try {
+    // Split file data into rows
+    const rows = fileData.toString().split("\n");
+
+    // Format data into arrays
     const formattedData = rows.map((row) => {
-      const slicedPart = row.split(",").slice(21);
-      const itemAtIndex10 = row.split(",")[10];
-      return [itemAtIndex10, ...slicedPart];
+      const slicedPart = row.split(",").slice(22);
+      const farmerSFId = row.split(",")[11];
+      const ffgId = row.split(",")[16];
+      return [farmerSFId, ffgId, ...slicedPart];
     });
 
-    // Clean empty strings and \r, and remove undefined arrays
+    // Clean and parse the formatted data
     const cleanedArray = formattedData
-      .filter((subarray) => subarray && subarray.length > 0)
+      .filter(Boolean)
       .map((subarray) =>
         subarray.map((item) =>
           item !== undefined ? item.replace(/[\r\n]/g, "").trim() : ""
         )
       );
 
+    // Extract headers from cleaned data
     const headers = cleanedArray[0].map((header, index) => {
-      if (index === 0) {
-        // Keep the header with farmer_sf_id unchanged
+      if (index === 0 || index === 1) {
         return header;
       } else {
-        // Clean other headers by separating the text by '-' and returning the last value
         const parts = header.split("-");
         return parts[parts.length - 1].trim();
       }
     });
 
-    // Create an array of columns
+    // Organize data into columns
     const columns = headers.map((header, index) =>
       cleanedArray.slice(1).map((data) => data[index])
     );
 
     // Clean special characters from columns
     const cleanedColumns = columns.map((column) =>
-      column.map((value) => {
-        if (value !== undefined && value !== null) {
-          return String(value).replace(/[^\w\s-]/g, "");
-        }
-        return "";
-      })
+      column.map((value) =>
+        value ? String(value).replace(/[^\w\s-]/g, "") : ""
+      )
     );
 
     // Remove empty arrays
@@ -1158,66 +937,900 @@ const updateAttendance = async (rows, sf_conn) => {
       (column) => column.length > 0
     );
 
+    // Define Salesforce object name
     const sObject = "Attendance__c";
 
+    // Find indices for important columns
     const farmerIdIndex = headers.indexOf("farmer_sf_id");
+    const ffgIdIndex = headers.indexOf("ffg_id");
 
+    // Gather all farmer IDs and module IDs
+    const farmerIds = filteredColumns[farmerIdIndex].slice(0);
+    const moduleIds = headers.slice(2);
+
+    // Create a map of farmer IDs to FFG IDs
+    const farmerToFFGMap = Object.fromEntries(
+      filteredColumns[farmerIdIndex].map((farmerId, index) => [
+        farmerId,
+        filteredColumns[ffgIdIndex][index],
+      ])
+    );
+
+    // Divide farmer IDs into batches of 700 each
+    const farmerIdBatches = [];
+    for (let i = 0; i < farmerIds.length; i += 700) {
+      const batch = farmerIds.slice(i, i + 700);
+      farmerIdBatches.push(batch);
+    }
+
+    // Initialize an array to store query results
+    const queryResults = [];
+
+    // Execute the query for each batch of farmer IDs
+    for (const farmerIdBatch of farmerIdBatches) {
+      // Construct a single query for the current batch of farmer IDs and all module IDs
+      const query = `
+    SELECT Id, Participant__c, Training_Session__r.Training_Module__c, Status__c
+    FROM ${sObject}
+    WHERE Participant__c IN ('${farmerIdBatch.join("','")}')
+      AND Training_Session__r.Training_Module__c IN ('${moduleIds.join("','")}')
+    ORDER BY CreatedDate DESC`;
+
+      // Execute the query and push the result to the queryResults array
+      const result = await sf_conn.query(query);
+      queryResults.push(...result.records);
+    }
+
+    console.log(`This FFG has ${queryResults.length} total attendance records`);
+
+    // Now queryResults contains all the records from all batches
+
+    // Map attendance records by farmer ID and module ID
+    const attendanceMap = {};
+    queryResults.forEach((record) => {
+      const farmerId = record.Participant__c;
+      const moduleId = record.Training_Session__r.Training_Module__c;
+      if (!attendanceMap[farmerId]) {
+        attendanceMap[farmerId] = {};
+      }
+      attendanceMap[farmerId][moduleId] = record;
+    });
+
+    // Fetch unique FFG IDs
+    const uniqueFFGIds = [
+      ...new Set(filteredColumns[ffgIdIndex].filter(Boolean)),
+    ];
+
+    // Query for training groups
+    const training_groups = await sf_conn.query(
+      `SELECT Id, TNS_Id__c FROM Training_Group__c WHERE TNS_Id__c IN (${uniqueFFGIds
+        .map((id) => `'${id}'`)
+        .join(",")})`
+    );
+
+    // Create a map of FFG IDs to Salesforce IDs
+    const trainingGroupsMap = new Map(
+      training_groups.records.map((record) => [record.TNS_Id__c, record.Id])
+    );
+
+    // Initialize arrays for records to update and create
     const attendanceToUpdate = [];
+    const attendanceToCreate = [];
 
-    for (let i = 1; i < filteredColumns.length; i++) {
-      for (let j = farmerIdIndex + 1; j < filteredColumns[i].length; j++) {
-        const moduleId = headers[i];
+    // Iterate through attendance values and populate update/create arrays
+    for (let i = 2; i < filteredColumns.length; i++) {
+      const moduleId = headers[i];
+      for (let j = farmerIdIndex + 1; j <= filteredColumns[i].length; j++) {
         const attendanceValue = filteredColumns[i][j - 1];
         const farmerId = filteredColumns[farmerIdIndex][j - 1];
+        const ffgId = farmerToFFGMap[farmerId];
+        const attendanceRecord = attendanceMap[farmerId]?.[moduleId];
+
+        if (!(attendanceValue === "" || attendanceValue === "1" || attendanceValue === "0")) {
+          throw { status: 404, message: `Invalid attendance value for farmer with SF ID: ${farmerId}` };
+        }        
 
         if (attendanceValue !== "") {
-          const query = `SELECT Id, Status__c FROM ${sObject} WHERE Participant__c = '${farmerId}' AND Training_Session__r.Training_Module__c = '${moduleId}' LIMIT 1`;
-
-          const result = await sf_conn.query(query);
-
-          if (result.records.length > 0) {
-            const recordId = result.records[0].Id;
-
-            // Use push instead of concat to add elements to the existing array
-            attendanceToUpdate.push({
-              Id: recordId,
-              Status__c: attendanceValue === "1" ? "Present" : "Absent",
-            });
+          if (attendanceRecord) {
+            const attendanceValueSF =
+              attendanceRecord.Status__c === "Present" ? "1" : "0";
+            if (attendanceValue !== attendanceValueSF) {
+              attendanceToUpdate.push({
+                Id: attendanceRecord.Id,
+                Status__c: attendanceValue === "1" ? "Present" : "Absent",
+              });
+            }
           } else {
-            throw new Error(
-              `No matching record found for farmerId: ${farmerId} and moduleId: ${moduleId}`
+            const trainingSession = await sf_conn.query(
+              `SELECT Id FROM Training_Session__c
+                WHERE Training_Group__c = '${trainingGroupsMap.get(
+                  ffgId
+                )}'AND Training_Module__c = '${moduleId}' LIMIT 1`
             );
+            if (trainingSession.records.length > 0) {
+              attendanceToCreate.push({
+                Status__c: attendanceValue === "1" ? "Present" : "Absent",
+                Participant__c: farmerId,
+                Training_Session__c: trainingSession.records[0].Id,
+                Submission_ID__c: "manual-upload",
+              });
+            }
           }
         }
       }
     }
 
-    // Update the attendance record
-    const updateResult = await sf_conn
-      .sobject(sObject)
-      .update(attendanceToUpdate);
+    console.log(`Updating ${attendanceToUpdate.length} records.`);
+    console.log(`Creating  ${attendanceToCreate.length} records`);
 
-    if (!updateResult.success) {
-      console.error(updateResult);
-      //throw new Error(updateResult.errors.join(", "));
+    // console.log(attendanceToCreate);
+
+    // Batch update and create operations
+    const updateBatches = chunkArray(attendanceToUpdate, 200);
+    const insertBatches = chunkArray(attendanceToCreate, 200);
+
+    // Execute batch update operations
+    const updateResults = await executeBatchOperation(
+      sf_conn,
+      "update",
+      updateBatches,
+      "Attendance__c"
+    );
+
+    // Execute batch insert operations
+    const insertResults = await executeBatchOperation(
+      sf_conn,
+      "create",
+      insertBatches,
+      "Attendance__c"
+    );
+
+    // Check for any failed results
+    const failedResults = [...updateResults, ...insertResults].filter(
+      (result) => result.status === 500
+    );
+
+    // Return appropriate response based on success or failure
+    if (failedResults.length === 0) {
+      return {
+        status: 200,
+        message: "All Attendance batches were successful!",
+        data: [...updateResults, ...insertResults],
+      };
     } else {
-      console.log(
-        "Updated records with Ids:",
-        attendanceToUpdate.map((record) => record.Id)
-      );
+      const errorMessage =
+        failedResults[0]?.error?.errors[0]?.message || "Unknown error";
+      throw {
+        status: 500,
+        message: `Error updating Attendance: ${errorMessage}`,
+      };
     }
-
-    return {
-      message: "Successfully updated attendance records",
-      status: 200,
-    };
   } catch (error) {
-    // console.error(error);
+    // Return error message if an error occurred
     return {
       message: error.message,
       status: 500,
     };
   }
+};
+
+function validateFileType(ext) {
+  return ext === ".csv";
+}
+
+async function readFileData(stream) {
+  return new Promise((resolve, reject) => {
+    let data = "";
+    stream.on("data", (chunk) => {
+      data += chunk.toString();
+    });
+    stream.on("end", () => {
+      resolve(data);
+    });
+    stream.on("error", (error) => {
+      reject(error);
+    });
+  });
+}
+
+// Parse CSV data into formatted data.
+function formatHHData(fileData) {
+  //const rows = fileData.trim().split("\n");
+  const rows = fileData.toString().split("\n");
+  if (rows.length === 0) {
+    throw new Error("No data found in the CSV file.");
+  }
+
+  const HEADER_MAPPING = {
+    hh_number: "Household_Number__c",
+    first_name: "Name",
+    middle_name: "Middle_Name__c",
+    last_name: "Last_Name__c",
+    sf_household_id: "Household__c",
+    farmer_number: "Primary_Household_Member__c",
+    tns_id: "TNS_Id__c",
+    gender: "Gender__c",
+    age: "Age__c",
+    "Phone Number": "Phone_Number__c",
+    coffee_tree_numbers: "Farm_Size__c",
+    ffg_id: "ffg_id",
+    status: "Status__c",
+    farmer_sf_id: "Participant__c",
+  };
+
+  // From the CSV we only need to get these data to update the household object on SALESFORCE.
+  const REQUIRED_COLUMNS = [
+    "Farm_Size__c",
+    "ffg_id",
+    "Household_Number__c",
+    "Primary_Household_Member__c",
+    "Household__c",
+  ];
+
+  const header = rows[0]
+    .split(",")
+    .map((value) => HEADER_MAPPING[value] || value);
+
+  const columnIndexMap = REQUIRED_COLUMNS.reduce((map, column) => {
+    map[column] = header.indexOf(column);
+    return map;
+  }, {});
+
+  const formattedData = rows.slice(1).map((row) => {
+    if (row.trim() !== "") {
+      const values = row.split(",");
+      const formattedRow = {};
+
+      REQUIRED_COLUMNS.forEach((column) => {
+        const index = columnIndexMap[column];
+        const value = values[index].replace(/"/g, "");
+
+        if (
+          column === "Primary_Household_Member__c" &&
+          (value === "1" || value === "2")
+        ) {
+          formattedRow[column] = value === "1" ? "Yes" : "No";
+        } else if (column === "Farm_Size__c" && value === "null") {
+          formattedRow[column] = "";
+        } else {
+          formattedRow[column] = value;
+        }
+      });
+
+      // Check if Household_Number__c is less than 10
+      if (parseInt(values[columnIndexMap["Household_Number__c"]], 10) < 10) {
+        // Prepend '0' to formattedRow["Name"]
+        formattedRow["Name"] =
+          "0" + values[columnIndexMap["Household_Number__c"]].replace(/"/g, "");
+      } else {
+        // If Household_Number__c is 10 or greater, directly assign the value to formattedRow["Name"]
+        formattedRow["Name"] = values[
+          columnIndexMap["Household_Number__c"]
+        ].replace(/"/g, "");
+      }
+      formattedRow["Name"] = values[
+        columnIndexMap["Household_Number__c"]
+      ].replace(/"/g, "");
+
+      return formattedRow;
+    }
+  });
+
+  return formattedData;
+}
+
+function formatParticipantData(fileData, trainingGroupsMap, recentHHData) {
+  const rows = fileData.toString().split("\n");
+  if (rows.length === 0) {
+    throw new Error("No data found in the CSV file.");
+  }
+
+  const HEADER_MAPPING = {
+    hh_number: "Household_Number__c",
+    first_name: "Name",
+    middle_name: "Middle_Name__c",
+    last_name: "Last_Name__c",
+    sf_household_id: "Household__c",
+    farmer_number: "Primary_Household_Member__c",
+    tns_id: "TNS_Id__c",
+    gender: "Gender__c",
+    age: "Age__c",
+    "Phone Number": "Phone_Number__c",
+    coffee_tree_numbers: "Farm_Size__c",
+    ffg_id: "ffg_id",
+    status: "Status__c",
+    farmer_sf_id: "Participant__c",
+  };
+
+  // map data and headers for Participant__c
+  const participantsHeaders = [
+    "Name",
+    "Middle_Name__c",
+    "Last_Name__c",
+    "Gender__c",
+    "Age__c",
+    //"Phone_Number__c",
+    "Primary_Household_Member__c",
+    "TNS_Id__c",
+    "Training_Group__c",
+    "Household__c",
+    "Status__c",
+    "Participant__c",
+    "Household_Number__c",
+  ];
+
+  const header = rows[0]
+    .split(",")
+    .map((value) => HEADER_MAPPING[value] || value);
+
+  const columnIndexMap2 = participantsHeaders.reduce((map, column) => {
+    map[column] = header.indexOf(column);
+    return map;
+  }, {});
+
+  const formattedPartsData = rows.slice(1).map((row) => {
+    if (row !== "") {
+      const values = row.split(",");
+      const formattedRow = {};
+
+      for (const column of participantsHeaders) {
+        const index = columnIndexMap2[column];
+        formattedRow[column] = values[index];
+
+        const value = values[index] ? values[index].replace(/"/g, "") : "";
+
+        formattedRow["Training_Group__c"] = trainingGroupsMap.get(
+          values[header.indexOf("ffg_id")].replace(/"/g, "")
+        );
+
+        // Change
+        if (column === "Primary_Household_Member__c" && value === "1") {
+          formattedRow[column] = "Yes";
+        } else if (column === "Primary_Household_Member__c" && value === "2") {
+          formattedRow[column] = "No";
+        } else {
+          formattedRow[column] = value != "null" ? value : "";
+        }
+
+        let hhNumber = "";
+        if (parseInt(values[header.indexOf("Household_Number__c")], 10) < 10) {
+          // Prepend '0' to formattedRow["Name"]
+          hhNumber =
+            "0" +
+            values[header.indexOf("Household_Number__c")].replace(/"/g, "");
+        } else {
+          hhNumber = values[header.indexOf("Household_Number__c")].replace(
+            /"/g,
+            ""
+          );
+        }
+
+        formattedRow["TNS_Id__c"] =
+          values[header.indexOf("ffg_id")].replace(/"/g, "") +
+          hhNumber +
+          values[header.indexOf("Primary_Household_Member__c")].replace(
+            /"/g,
+            ""
+          );
+        formattedRow["Resend_to_OpenFN__c"] = "TRUE";
+        formattedRow["Create_In_CommCare__c"] = "FALSE";
+        formattedRow["Check_Status__c"] = "TRUE";
+        // formattedRow["Household__c"] = null; // Default value if no match is found
+      }
+
+      return formattedRow;
+    }
+  });
+
+  // Add Household Id for new participants or in case participant Households have changed
+  const formattedPartsDataWithHHId = addHHIdToParticipants(
+    formattedPartsData,
+    recentHHData
+  );
+
+  return formattedPartsDataWithHHId;
+}
+
+function groupDataByHousehold(formattedData) {
+  // group data by Household_Number__c and take the row with Primary_Household_Member__c = 'Yes',
+  // and get total number of rows in each group and assign total number to Number_of_Members__c
+
+  const groupedData = formattedData
+    .filter((item) => item !== undefined)
+    .reduce((acc, curr) => {
+      const key = curr["Household_Number__c"] + "-" + curr["ffg_id"];
+
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+
+      acc[key].push(curr);
+
+      return acc;
+    }, {});
+
+  const groupedDataArray = Object.values(groupedData);
+
+  const households = groupedDataArray.map((group) => {
+    const primaryMember = group.find(
+      (member) => member["Primary_Household_Member__c"] === "Yes"
+    );
+
+    const secondaryMember = group.find(
+      (member) => member["Primary_Household_Member__c"] === "No"
+    );
+
+    if (group.length === 2 && secondaryMember === undefined) {
+      throw new Error(
+        `Household: ${group[0].Household_Number__c} has the same SF ID in both FFG: ${group[0].ffg_id} and FFG: ${group[1].ffg_id} If one is a new Household please leave the SF Id empty.`
+      );
+    }
+
+    if (
+      group.length === 2 &&
+      primaryMember.Household_Number__c !== secondaryMember.Household_Number__c
+    ) {
+      throw new Error(
+        `Household: ${group[0].Household_Number__c} / FFG ${group[0].ffg_id} has 2 households with different SF Ids.`
+      );
+    }
+
+    if (group.length > 2) {
+      throw new Error(
+        `Household: ${group[0].Household_Number__c} FFG ${group[0].ffg_id} has more than 2 members`
+      );
+    }
+
+    // Check if group has a primary member
+    if (primaryMember) {
+      return {
+        ...primaryMember,
+        Number_of_Members__c: group.length,
+      };
+    } else {
+      throw new Error(
+        `Household: ${group[0].Household_Number__c} FFG: ${group[0].ffg_id} does not have a primary member.`
+      );
+    }
+  });
+  //.filter((value) => value !== undefined);
+
+  return households;
+}
+
+async function matchFFGsWithSalesforceIds(sf_conn, groupedData) {
+  try {
+    const ffgIdSet = new Set(groupedData.map((item) => item.ffg_id));
+    const uniqueFFGIds = [...ffgIdSet];
+
+    const training_groups = await sf_conn.query(
+      `SELECT Id, TNS_Id__c FROM Training_Group__c WHERE TNS_Id__c IN (${uniqueFFGIds
+        .map((id) => `'${id}'`)
+        .join(",")})`
+    );
+
+    console.log(`Found: ${training_groups.records.length} Total groups`);
+
+    if (training_groups.totalSize === 0) {
+      throw { message: `Could not find any FFG`, status: 404 };
+    }
+
+    const trainingGroupsMap = new Map(
+      training_groups.records.map((record) => [record.TNS_Id__c, record.Id])
+    );
+
+    return trainingGroupsMap;
+  } catch (error) {
+    throw error;
+  }
+}
+
+async function updateHouseholdsInSalesforce(
+  sf_conn,
+  groupedData,
+  trainingGroupsMap
+) {
+  try {
+    const existingHouseholdNumbers = groupedData
+      .map((record) => record.Household__c)
+      .filter((record) => record !== "");
+
+    const householdBatchSize = 500;
+    const batchedHouseholdNumbers = chunkArray(
+      existingHouseholdNumbers,
+      householdBatchSize
+    );
+
+    const householdQueries = batchedHouseholdNumbers.map((batch) => {
+      return sf_conn.query(
+        `SELECT Id, Farm_Size__c, Household_Number__c, Name, Number_of_Members__c, training_group__c 
+        FROM Household__c WHERE Id IN ('${batch.join("','")}')`
+      );
+    });
+
+    const householdsFromSFArray = await Promise.all(householdQueries).then(
+      (results) => results.flatMap((result) => result.records)
+    );
+
+    console.log(`Returned ${householdsFromSFArray.length} Households`);
+    console.log(householdsFromSFArray.slice(0, 2));
+
+    const HHdataToInsert = groupedData.map((item) => {
+      const { Primary_Household_Member__c, Household__c, ffg_id, ...rest } =
+        item;
+      rest.Id = Household__c;
+      rest.Training_Group__c = trainingGroupsMap.get(ffg_id);
+      return rest;
+    });
+
+    const filteredHHDataToInsert = HHdataToInsert.filter((itemToInsert) => {
+      const matchingHousehold = householdsFromSFArray.find(
+        (sfHousehold) => sfHousehold.Id === itemToInsert.Id
+      );
+      if (!matchingHousehold) {
+        return true;
+      } else if (!didHouseholdValuesChange(matchingHousehold, itemToInsert)) {
+        // console.log("Values changed");
+        // console.log(matchingHousehold);
+        // console.log(itemToInsert);
+        return true;
+      } else {
+        return false;
+      }
+    });
+
+    // console.log(
+    //   `Actual number of household to insert is: ${filteredHHDataToInsert.length}`
+    // );
+    // console.log(filteredHHDataToInsert.slice(0, 1));
+
+    const hhResult = await executeHHResult(sf_conn, filteredHHDataToInsert);
+    return hhResult;
+  } catch (error) {
+    console.error("Error updating households:", error.message);
+    throw {
+      status: error.status || 500,
+      message: error.message || "Unknown error while updating households",
+    };
+  }
+}
+
+async function queryRecentHHData(sf_conn, hhResult) {
+  let recentHHsIds = [];
+
+  hhResult.data.forEach((result) =>
+    result.data.forEach((result) => recentHHsIds.push(result.id))
+  );
+
+  const recentHousehoulds = [];
+  for (let i = 0; i < recentHHsIds.length; i += 700) {
+    const batch = recentHHsIds.slice(i, i + 700);
+    recentHousehoulds.push(batch);
+  }
+
+  const recentHHsQuery = recentHousehoulds.map((batch) => {
+    return sf_conn.query(
+      `SELECT Id, Household_Number__c, training_group__c FROM Household__c WHERE Id IN ('${batch.join(
+        "','"
+      )}')`
+    );
+  });
+
+  const recentHousehouldsArray = [];
+  await Promise.all(
+    recentHHsQuery.map(async (queryResult) => {
+      const result = await queryResult;
+      recentHousehouldsArray.push(...result.records);
+    })
+  );
+
+  return recentHousehouldsArray;
+}
+
+async function updateParticipantsInSalesforce(sf_conn, formattedData) {
+  try {
+    // Query existing participant records from Salesforce
+    const existingParticipants = await queryExistingParticipants(
+      sf_conn,
+      formattedData
+    );
+
+    console.log(
+      `We already have ${existingParticipants.length} on salesforce. Here is a sample`
+    );
+
+    console.log(existingParticipants.slice(0, 1));
+
+    const participantsToInsert = formattedData.filter((itemToInsert) => {
+      const matchingParticipant = existingParticipants.find(
+        (sfParticipant) => sfParticipant.Id === itemToInsert.Id
+      );
+      if (!matchingParticipant) {
+        return true;
+      } else if (
+        !didParticipantValuesChange(matchingParticipant, itemToInsert)
+      ) {
+        // console.log("Values changed");
+        // console.log(matchingParticipant);
+        // console.log(itemToInsert);
+        return true;
+      } else {
+        return false;
+      }
+    });
+
+    // Execute update operation for the participants
+    const partsData = await executePartsResult(sf_conn, participantsToInsert);
+
+    return partsData;
+  } catch (error) {
+    console.error("Error updating participants:", error.message);
+    return {
+      status: error.status || 500,
+      message: error.message || "Unknown error while updating participants",
+    };
+  }
+}
+
+async function executePartsResult(sf_conn, participantsData) {
+  const batchSize = 200;
+  const partsToUpdateInSalesforce = [];
+  participantsData.forEach((record) => {
+    if (record.Id) {
+      record.Resend_to_OpenFN__c = true;
+      record.Create_In_CommCare__c = false;
+      record.Check_Status__c = true;
+      partsToUpdateInSalesforce.push(record);
+    }
+  });
+
+  console.log("partsToUpdateInSalesforce", partsToUpdateInSalesforce.length);
+
+  const updateBatches = chunkArray(partsToUpdateInSalesforce, batchSize);
+
+  const updateResults = await executeBatchOperation(
+    sf_conn,
+    "update",
+    updateBatches,
+    "Participant__c"
+  );
+
+  const failedResults = [...updateResults].filter(
+    (result) => result.status === 500
+  );
+
+  if (failedResults.length === 0) {
+    return {
+      status: 200,
+      message: "All batches were successful!",
+      data: [...updateResults],
+    };
+  } else {
+    console.log("We got some errors");
+    const errorMessage =
+      failedResults[0].error.errors[0].message || "Unknown error";
+    throw {
+      status: 500,
+      message: `Error updating Participants: ${errorMessage}`,
+    };
+  }
+}
+
+function addHHIdToParticipants(formattedData, recentHousehouldsArray) {
+  // insert Household Id to Household__c field in participantsData
+  return formattedData
+    .filter((item) => item !== undefined)
+    .map((part, index) => {
+      const matchingHHRecord = recentHousehouldsArray.find(
+        (record) =>
+          parseInt(record.Household_Number__c, 10) ===
+            parseInt(part.Household_Number__c, 10) &&
+          record.Training_Group__c === part.Training_Group__c
+      );
+
+      let Household = part.Household__c;
+      if (matchingHHRecord) {
+        Household = matchingHHRecord.Id;
+      }
+      // else {
+      //   return resolve({
+      //     status: 500,
+      //     message: `No matching Household record found for Farmer: ${part.TNS_Id__c}`,
+      //   });
+      // }
+
+      const { Participant__c, Household__c, Household_Number__c, ...rest } =
+        part;
+
+      return {
+        ...rest,
+        Id: Participant__c,
+        Household__c: Household,
+      };
+    });
+}
+
+async function queryExistingParticipants(sf_conn, participantsData) {
+  const participantIds = participantsData.map((part) => part.Id);
+  if (participantIds.length === 0) return [];
+
+  const batchSize = 700;
+  const participantRecords = [];
+  for (let i = 0; i < participantIds.length; i += batchSize) {
+    const batchIds = participantIds.slice(i, i + batchSize);
+    const queryResult = await sf_conn.query(
+      `SELECT Id, Name, Training_Group__c, TNS_Id__c, Resend_to_OpenFN__c, Create_In_CommCare__c, 
+          Check_Status__c, Middle_Name__c, Last_Name__c, Gender__c, Age__c, Primary_Household_Member__c, 
+          Household__c, Status__c
+        FROM Participant__c WHERE Id IN ('${batchIds.join("','")}')`
+    );
+    participantRecords.push(...queryResult.records);
+  }
+  return participantRecords;
+}
+
+async function writeUploadedFile(stream, ext) {
+  // Implement writeUploadedFile function
+  // const success = partsData.every(
+  //   (result) => result.success === true
+  // );
+  //if (success) {
+  // check if uploads folder exists
+  // const uploadsFolder = join(getDirName(import.meta.url), "../../uploads");
+  // if (!fs.existsSync(uploadsFolder)) {
+  //   fs.mkdirSync(uploadsFolder);
+  // }
+  // // name file with user_id and date
+  // const newFilename = `participants-${Date.now()}${ext}`;
+  // stream = createReadStream();
+  // let serverFile = join(
+  //   getDirName(import.meta.url),
+  //   `../../uploads/${newFilename}`
+  // );
+  // let writeStream = createWriteStream(serverFile);
+  // await stream.pipe(writeStream);
+}
+
+async function executeHHResult(sf_conn, filteredHHDataToInsert) {
+  const batchSize = 200;
+  const recordsToUpdateInSalesforce = [];
+  const newRecordsToInsertInSalesforce = [];
+
+  filteredHHDataToInsert.forEach((record) => {
+    if (record.Id) {
+      recordsToUpdateInSalesforce.push(record);
+    } else {
+      newRecordsToInsertInSalesforce.push(record);
+    }
+  });
+
+  console.log(
+    "recordsToUpdateInSalesforce",
+    recordsToUpdateInSalesforce.length
+  );
+  console.log(
+    "newRecordsToInsertInSalesforce",
+    newRecordsToInsertInSalesforce.length
+  );
+
+  const updateBatches = chunkArray(recordsToUpdateInSalesforce, batchSize);
+  const insertBatches = chunkArray(newRecordsToInsertInSalesforce, batchSize);
+
+  const updateResults = await executeBatchOperation(
+    sf_conn,
+    "update",
+    updateBatches,
+    "Household__c"
+  );
+  const insertResults = await executeBatchOperation(
+    sf_conn,
+    "create",
+    insertBatches,
+    "Household__c"
+  );
+
+  const failedResults = [...updateResults, ...insertResults].filter(
+    (result) => result.status === 500
+  );
+
+  if (failedResults.length === 0) {
+    console.log("All households updated.");
+    return {
+      status: 200,
+      message: "All Household batches were successful!",
+      data: [...updateResults, ...insertResults],
+    };
+  } else {
+    const errorMessage =
+      failedResults[0].error.errors[0].message || "Unknown error";
+    throw {
+      status: 500,
+      message: `Error updating households: ${errorMessage}`,
+    };
+  }
+}
+
+function didHouseholdValuesChange(sfHousehold, itemToInsert) {
+  return (
+    sfHousehold.Farm_Size__c === parseInt(itemToInsert.Farm_Size__c) &&
+    sfHousehold.Name === itemToInsert.Name &&
+    sfHousehold.Number_of_Members__c === itemToInsert.Number_of_Members__c &&
+    sfHousehold.Training_Group__c === itemToInsert.Training_Group__c
+  );
+}
+
+function didParticipantValuesChange(sfParticipant, itemToInsert) {
+  // Check if Middle_Name__c in sfParticipant is null or undefined
+  const sfMiddleNameIsNull =
+    sfParticipant.Middle_Name__c === null ||
+    sfParticipant.Middle_Name__c === undefined;
+
+  // Check if Middle_Name__c in itemToInsert is an empty string
+  const itemMiddleNameIsEmpty = itemToInsert.Middle_Name__c === "";
+
+  // Compare Middle_Name__c values accounting for both scenarios
+  const middleNameComparison =
+    (sfMiddleNameIsNull && itemMiddleNameIsEmpty) || // Both are null/empty
+    sfParticipant.Middle_Name__c === itemToInsert.Middle_Name__c; // Normal comparison
+
+  // Check if Last_Name__c in sfParticipant is null or undefined
+  const sfLastNameIsNull =
+    sfParticipant.Last_Name__c === null ||
+    sfParticipant.Last_Name__c === undefined;
+
+  // Check if Last_Name__c in itemToInsert is an empty string
+  const itemLastNameIsEmpty = itemToInsert.Last_Name__c === "";
+
+  // Compare Last_Name__c values accounting for both scenarios
+  const lastNameComparison =
+    (sfLastNameIsNull && itemLastNameIsEmpty) || // Both are null/empty
+    sfParticipant.Last_Name__c === itemToInsert.Last_Name__c; // Normal comparison
+
+  return (
+    sfParticipant.Name === itemToInsert.Name &&
+    sfParticipant.Training_Group__c === itemToInsert.Training_Group__c &&
+    sfParticipant.TNS_Id__c === itemToInsert.TNS_Id__c &&
+    sfParticipant.Age__c === parseInt(itemToInsert.Age__c) &&
+    sfParticipant.Primary_Household_Member__c ===
+      itemToInsert.Primary_Household_Member__c &&
+    sfParticipant.Household__c === itemToInsert.Household__c &&
+    sfParticipant.Status__c === itemToInsert.Status__c &&
+    middleNameComparison && // Include the modified comparison for Middle_Name__c
+    lastNameComparison // Include the modified comparison for Last_Name__c
+  );
+}
+
+async function executeBatchOperation(sf_conn, action, batches, object) {
+  const results = await Promise.all(
+    batches.map(async (batch) => {
+      try {
+        const result = await sf_conn.sobject(object)[action](batch);
+        if (
+          Array.isArray(result) &&
+          result.some((r) => r.success === false && r.errors)
+        ) {
+          console.error(`Error ${action}ing records:`);
+          console.log(result[0]);
+          return { status: 500, error: result[0], batch };
+        } else {
+          return { status: 200, data: result, batch };
+        }
+      } catch (err) {
+        console.error(`Error ${action}ing records:`, err);
+        return { status: 500, error: err[0], batch };
+      }
+    })
+  );
+
+  return results;
+}
+
+const chunkArray = (arr, size) => {
+  const result = [];
+  for (let i = 0; i < arr.length; i += size) {
+    result.push(arr.slice(i, i + size));
+  }
+  return result;
 };
 
 export default ParticipantsResolvers;

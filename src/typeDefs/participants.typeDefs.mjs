@@ -34,6 +34,7 @@ const ParticipantsTypeDefs = gql`
 
   type Mutation {
     uploadParticipants(parts_file: Upload!): UploadResponse
+    uploadParticipant(parts_file: Upload!): UploadResponse
     syncParticipantsWithCOMMCARE(project_id: String!): UploadResponse
   }
 
