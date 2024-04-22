@@ -21,8 +21,8 @@ const TrainingSessionsResolvers = {
         return {
           message: "Training sessions fetched successfully",
           status: 200,
-          trainingSessions: training_sessions.records.map(
-            (training_session) => {
+          trainingSessions: training_sessions.records
+            .map((training_session) => {
               return {
                 ts_id: training_session.Id,
                 ts_name: training_session.Name,

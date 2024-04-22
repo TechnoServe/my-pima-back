@@ -4,7 +4,7 @@ const TrainingSessionsTypeDefs = gql`
   type TrainingSession {
     ts_id: ID!
     ts_name: String!
-    ts_module: String!
+    ts_module: String
     ts_group: String
     tns_id: String
     farmer_trainer: String
