@@ -958,27 +958,46 @@ const updateAttendance = async (fileData, sf_conn) => {
 
     // Divide farmer IDs into batches of 700 each
     const farmerIdBatches = [];
-    for (let i = 0; i < farmerIds.length; i += 700) {
-      const batch = farmerIds.slice(i, i + 700);
+    for (let i = 0; i < farmerIds.length; i += 500) {
+      const batch = farmerIds.slice(i, i + 500);
       farmerIdBatches.push(batch);
     }
+
+    console.log("Querying existing attendance records");
 
     // Initialize an array to store query results
     const queryResults = [];
 
     // Execute the query for each batch of farmer IDs
     for (const farmerIdBatch of farmerIdBatches) {
-      // Construct a single query for the current batch of farmer IDs and all module IDs
-      const query = `
-    SELECT Id, Participant__c, Training_Session__r.Training_Module__c, Status__c
-    FROM ${sObject}
-    WHERE Participant__c IN ('${farmerIdBatch.join("','")}')
-      AND Training_Session__r.Training_Module__c IN ('${moduleIds.join("','")}')
-    ORDER BY CreatedDate DESC`;
+      let done = false;
+      let nextRecordsUrl = null;
 
-      // Execute the query and push the result to the queryResults array
-      const result = await sf_conn.query(query);
-      queryResults.push(...result.records);
+      while (!done) {
+        // Construct a single query for the current batch of farmer IDs and all module IDs
+        let query = `
+      SELECT Id, Participant__c, Training_Session__r.Training_Module__c, Status__c
+      FROM ${sObject}
+      WHERE Participant__c IN ('${farmerIdBatch.join("','")}')
+        AND Training_Session__r.Training_Module__c IN ('${moduleIds.join(
+          "','"
+        )}')
+      ORDER BY CreatedDate DESC`;
+
+        if (nextRecordsUrl) {
+          query += ` NEXT ${nextRecordsUrl}`;
+        }
+
+        // Execute the query and push the result to the queryResults array
+        const result = await sf_conn.query(query);
+        queryResults.push(...result.records);
+
+        // If done is true, it means all records have been retrieved
+        done = result.done;
+
+        // Update nextRecordsUrl for the next iteration
+        nextRecordsUrl = result.nextRecordsUrl;
+      }
     }
 
     console.log(`This FFG has ${queryResults.length} total attendance records`);
@@ -1000,6 +1019,8 @@ const updateAttendance = async (fileData, sf_conn) => {
     const uniqueFFGIds = [
       ...new Set(filteredColumns[ffgIdIndex].filter(Boolean)),
     ];
+
+    console.log("Querying existing training groups");
 
     // Query for training groups
     const training_groups = await sf_conn.query(
@@ -1026,9 +1047,18 @@ const updateAttendance = async (fileData, sf_conn) => {
         const ffgId = farmerToFFGMap[farmerId];
         const attendanceRecord = attendanceMap[farmerId]?.[moduleId];
 
-        if (!(attendanceValue === "" || attendanceValue === "1" || attendanceValue === "0")) {
-          throw { status: 404, message: `Invalid attendance value for farmer with SF ID: ${farmerId}` };
-        }        
+        if (
+          !(
+            attendanceValue === "" ||
+            attendanceValue === "1" ||
+            attendanceValue === "0"
+          )
+        ) {
+          throw {
+            status: 404,
+            message: `Invalid attendance value for farmer with SF ID: ${farmerId}`,
+          };
+        }
 
         if (attendanceValue !== "") {
           if (attendanceRecord) {
@@ -1073,7 +1103,7 @@ const updateAttendance = async (fileData, sf_conn) => {
     const updateResults = await executeBatchOperation(
       sf_conn,
       "update",
-      updateBatches,
+      [],
       "Attendance__c"
     );
 
