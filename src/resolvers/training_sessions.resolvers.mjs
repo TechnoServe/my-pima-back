@@ -71,7 +71,12 @@ const TrainingSessionsResolvers = {
 
         // get training sessions
         const training_sessions = await sf_conn.query(
-          `SELECT Id, Name, Module_Name__c, Training_Group__r.Name, Training_Group__r.TNS_Id__c, Session_Status__c, Male_Attendance__c, Female_Attendance__c, Trainer__r.Name, Project_Name__c, Session_Photo_URL__c, Session_Image_Status__c, Verified__c, Date__c FROM Training_Session__c WHERE Training_Group__r.Group_Status__c='Active' AND Project_Name__c = '${project_name}'`
+          `SELECT Id, Name, Module_Name__c, Training_Group__r.Name, Training_Group__r.TNS_Id__c, 
+            Session_Status__c, Male_Attendance__c, Female_Attendance__c, Trainer__r.Name, 
+            Project_Name__c, Session_Photo_URL__c, Session_Image_Status__c, Verified__c, Date__c,
+            Male_Count_Light_Full__c, Female_Count_Light_Full__c
+           FROM Training_Session__c 
+           WHERE Training_Group__r.Group_Status__c='Active' AND Project_Name__c = '${project_name}'`
         );
 
         // check if training sessions exist
@@ -97,8 +102,8 @@ const TrainingSessionsResolvers = {
                   ? training_session.Trainer__r.Name
                   : null,
                 ts_status: training_session.Session_Status__c,
-                total_males: training_session.Male_Attendance__c || 0,
-                total_females: training_session.Female_Attendance__c || 0,
+                total_males: training_session.Male_Attendance__c || training_session.Male_Count_Light_Full__c || 0,
+                total_females: training_session.Female_Attendance__c || training_session.Female_Count_Light_Full__c || 0,
                 has_image: training_session.Session_Photo_URL__c ? true : false,
                 session_image_status:
                   training_session.Session_Image_Status__c || "not_verified",

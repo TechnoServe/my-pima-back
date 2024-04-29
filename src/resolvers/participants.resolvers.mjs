@@ -1103,7 +1103,7 @@ const updateAttendance = async (fileData, sf_conn) => {
     const updateResults = await executeBatchOperation(
       sf_conn,
       "update",
-      [],
+      updateBatches,
       "Attendance__c"
     );
 
