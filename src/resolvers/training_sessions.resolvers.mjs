@@ -78,7 +78,7 @@ const TrainingSessionsResolvers = {
             Project_Name__c, Session_Photo_URL__c, Session_Image_Status__c, Verified__c, Date__c,
             Male_Count_Light_Full__c, Female_Count_Light_Full__c
            FROM Training_Session__c 
-           WHERE Training_Group__r.Group_Status__c='Active' AND Project_Name__c = '${project_name}' ORDER BY Date__c DESC LIMIT 3000`
+           WHERE Training_Group__r.Group_Status__c='Active' AND Project_Name__c = '${project_name}' ORDER BY Date__c DESC`
         );
 
         training_sessions = training_sessions.concat(result.records);
