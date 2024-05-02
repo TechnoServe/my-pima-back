@@ -72,7 +72,7 @@ const TrainingSessionsResolvers = {
         let training_sessions = [];
 
         // get training sessions
-        const result = await sf_conn.query(
+        let result = await sf_conn.query(
           `SELECT Id, Name, Module_Name__c, Training_Group__r.Name, Training_Group__r.TNS_Id__c, 
             Session_Status__c, Male_Attendance__c, Female_Attendance__c, Trainer__r.Name, 
             Project_Name__c, Session_Photo_URL__c, Session_Image_Status__c, Verified__c, Date__c,
