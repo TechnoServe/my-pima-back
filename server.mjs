@@ -60,9 +60,9 @@ app.use(function (req, res, next) {
 });
 
 // const redis = new Redis({
-//   host: "redis-12533.c15.us-east-1-2.ec2.cloud.redislabs.com",
-//   port: 12533,
-//   password: "rgyzuNLcxfcLnLkGyqauBQrPqezHEPft",
+//   host: "redis-18523.c311.eu-central-1-1.ec2.redns.redis-cloud.com",
+//   port: 18523,
+//   password: "l7hwHCWhtn6DqDDmzZjZkk3BvnSApgmf",
 //   retryStrategy: (times) => {
 //     // reconnect after
 //     return Math.min(times * 50, 2000);
@@ -206,7 +206,7 @@ server
     });
 
     // Start the cron job
-    fetchDataJob.start();
+    // fetchDataJob.start();
 
     app.listen({ port: PORT }, () => {
       console.log(

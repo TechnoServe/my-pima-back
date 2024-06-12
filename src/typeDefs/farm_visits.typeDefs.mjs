@@ -12,6 +12,14 @@ const FarmVisitsTypeDefs = gql`
     farmer_trainer: String!
     has_training: String!
     date_visited: String!
+    qas: [QA]
+  }
+
+  type QA {
+    practice_name_id: String!
+    practice_name: String!
+    questions: [String]
+    answers: [String]
   }
 
   type Query {
@@ -19,6 +27,7 @@ const FarmVisitsTypeDefs = gql`
     getFarmVisitsByGroup(tg_id: String!): AllFarmVisitsResponse
     getFarmVisitsBySession(ts_id: String!): AllFarmVisitsResponse
     getFarmVisitsByParticipant(part_id: String!): AllFarmVisitsResponse
+    getFVQAsByProjectForReview(project_id: String!): AllFarmVisitsResponse
   }
 
   type AllFarmVisitsResponse {

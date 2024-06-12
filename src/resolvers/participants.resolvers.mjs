@@ -976,26 +976,26 @@ const updateAttendance = async (fileData, sf_conn) => {
       while (!done) {
         // Construct a single query for the current batch of farmer IDs and all module IDs
         let query = `
-      SELECT Id, Participant__c, Training_Session__r.Training_Module__c, Status__c
-      FROM ${sObject}
-      WHERE Participant__c IN ('${farmerIdBatch.join("','")}')
-        AND Training_Session__r.Training_Module__c IN ('${moduleIds.join(
-          "','"
-        )}')
-      ORDER BY CreatedDate DESC`;
+        SELECT Id, Participant__c, Training_Session__r.Training_Module__c, Status__c
+        FROM ${sObject}
+        WHERE Participant__c IN ('${farmerIdBatch.join("','")}')
+          AND Training_Session__r.Training_Module__c IN ('${moduleIds.join(
+            "','"
+          )}')
+        ORDER BY CreatedDate DESC`;
 
-        if (nextRecordsUrl) {
-          query += ` NEXT ${nextRecordsUrl}`;
-        }
+        // Execute the query or queryMore based on the nextRecordsUrl
+        const result = nextRecordsUrl
+          ? await sf_conn.queryMore(nextRecordsUrl)
+          : await sf_conn.query(query);
 
-        // Execute the query and push the result to the queryResults array
-        const result = await sf_conn.query(query);
+        // Push the result to the queryResults array
         queryResults.push(...result.records);
 
         // If done is true, it means all records have been retrieved
         done = result.done;
 
-        // Update nextRecordsUrl for the next iteration
+        // Update nextRecordsUrl for the next iteration if more records are available
         nextRecordsUrl = result.nextRecordsUrl;
       }
     }
@@ -1835,12 +1835,18 @@ async function executeBatchOperation(sf_conn, action, batches, object) {
     batches.map(async (batch) => {
       try {
         const result = await sf_conn.sobject(object)[action](batch);
+        result.map((data) => {
+          if (data.success === false) {
+            console.log(data.errors[0]);
+            //return { status: 500, error: result[0], batch };
+          }
+        });
         if (
           Array.isArray(result) &&
-          result.some((r) => r.success === false && r.errors)
+          result.some((r) => r.success === false && r.errors.length > 0)
         ) {
           console.error(`Error ${action}ing records:`);
-          console.log(result[0]);
+          // console.log(result[0]);
           return { status: 500, error: result[0], batch };
         } else {
           return { status: 200, data: result, batch };
