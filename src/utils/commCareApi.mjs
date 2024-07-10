@@ -4,6 +4,7 @@ const fetchImage = async (url) => {
   if (!url) return null;
 
   try {
+    console.log("fetchung image")
     // fetch from url with authorization
     const response = await axios.get(url, {
       headers: {
@@ -20,6 +21,8 @@ const fetchImage = async (url) => {
     // Send the base64 data to the frontend
     return `data:image/png;base64,${base64encodedData}`;
   } catch (error) {
+    console.log(error);
+    console.log("error fetching imges")
     return null;
   }
 };
