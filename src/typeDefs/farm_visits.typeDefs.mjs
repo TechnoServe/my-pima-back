@@ -77,6 +77,7 @@ const FarmVisitsTypeDefs = gql`
     PesticideUse_Pass: String
     IPDM_Pass: String
     Pruning_Pass: String
+    ErosionControl_Pass: String
 
   }
 
