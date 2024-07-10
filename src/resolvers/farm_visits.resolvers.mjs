@@ -531,22 +531,36 @@ const FarmVisitsResolvers = {
               }
             }
 
-            let NutritionPass = "No";
+            const NonRecommendedNutri = [
+              "Ammonium Nitrate",
+              "Did NOT apply any fertilizer in past 12 months",
+              "Did not apply any fertilizer in past 12 months",
+            ];
+
+            const recommendedMethods = chemAndFertilizersArray.filter(
+              (method) => !NonRecommendedNutri.includes(method)
+            );
+            
+            const nutritionPassCount = recommendedMethods.length;
+            
+            let nutritionPass = "No";
+            
+            const isLeavesColorDarkGreen = bp.LeavesColor === "Nearly all leaves are dark green and less than 5% (less than 5 in 100) are yellow, pale green, or brown.";
+            
             if (
               visitType === "Farm Visit Full - KE" &&
-              chemAndFertilizersArray.length >= 2 &&
-              bp.LeavesColor ===
-                "Nearly all leaves are dark green and less than 5% (less than 5 in 100) are yellow, pale green, or brown."
+              nutritionPassCount >= 2 &&
+              isLeavesColorDarkGreen
             ) {
-              NutritionPass = "Yes";
+              nutritionPass = "Yes";
             } else if (
               visitType === "Farm Visit Full - ET" &&
-              chemAndFertilizersArray.length >= 1 &&
-              bp.LeavesColor ===
-                "Nearly all leaves are dark green and less than 5% (less than 5 in 100) are yellow, pale green, or brown."
+              nutritionPassCount >= 1 &&
+              isLeavesColorDarkGreen
             ) {
-              NutritionPass = "Yes";
+              nutritionPass = "Yes";
             }
+            
 
             const MainStemsPass =
               visitType === "Farm Visit Full - KE" &&
@@ -579,10 +593,10 @@ const FarmVisitsResolvers = {
                 (method) => method === "No pruning methods used"
               ).length;
 
-              if (passCount >= 3) {
+              if (passCount >= 4) {
                 PruningPass = "Yes";
               } else if (
-                (passCount > 0 && passCount < 3) ||
+                (passCount > 0 && passCount < 4) ||
                 naCount > 0 ||
                 failCount > 0
               ) {
