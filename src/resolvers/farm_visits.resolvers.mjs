@@ -540,13 +540,15 @@ const FarmVisitsResolvers = {
             const recommendedMethods = chemAndFertilizersArray.filter(
               (method) => !NonRecommendedNutri.includes(method)
             );
-            
+
             const nutritionPassCount = recommendedMethods.length;
-            
+
             let nutritionPass = "No";
-            
-            const isLeavesColorDarkGreen = bp.LeavesColor === "Nearly all leaves are dark green and less than 5% (less than 5 in 100) are yellow, pale green, or brown.";
-            
+
+            const isLeavesColorDarkGreen =
+              bp.LeavesColor ===
+              "Nearly all leaves are dark green and less than 5% (less than 5 in 100) are yellow, pale green, or brown.";
+
             if (
               visitType === "Farm Visit Full - KE" &&
               nutritionPassCount >= 2 &&
@@ -560,7 +562,6 @@ const FarmVisitsResolvers = {
             ) {
               nutritionPass = "Yes";
             }
-            
 
             const MainStemsPass =
               visitType === "Farm Visit Full - KE" &&
@@ -576,9 +577,18 @@ const FarmVisitsResolvers = {
               visitType === "Farm Visit Full - KE" && bp.usedPesticide === "Yes"
                 ? "Yes"
                 : "No";
+            const filteredErosionMethodsArray = erosionMethodsArray.filter(
+              (method) => method !== "No erosion control method seen"
+            );
+
             const ErosionControlPass =
-              erosionMethodsArray.length >= 1 ? "Yes" : "No";
-            const IPDMPass = ipdmMethodsArray.length >= 3 ? "Yes" : "No";
+              filteredErosionMethodsArray.length >= 1 ? "Yes" : "No";
+
+            const filteredIpdmMethodsArray = ipdmMethodsArray.filter(
+              (method) => method !== "Does not know any methods"
+            );
+            
+            const IPDMPass = filteredIpdmMethodsArray.length >= 3 ? "Yes" : "No";
 
             let PruningPass = "No";
             if (visitType === "Farm Visit Full - KE") {
