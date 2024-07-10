@@ -632,7 +632,7 @@ const FarmVisitsResolvers = {
               how_many_weeds_under_canopy_and_how_big__c: bp.WeedsCanopy,
               Weeding_Pass: WeedingPass,
               color_of_coffee_tree_leaves__c: bp.LeavesColor,
-              Nutrition_Pass: NutritionPass,
+              Nutrition_Pass: nutritionPass,
               number_of_main_stems_on_majority_trees__c: bp.MainStems,
               Rejuvenation_Pass: MainStemsPass,
               Have_herbicides_been_used_on_the_field__c: bp.isHerbicidesUsed,
