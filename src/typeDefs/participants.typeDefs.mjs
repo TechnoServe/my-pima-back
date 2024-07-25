@@ -14,7 +14,7 @@ const ParticipantsTypeDefs = gql`
     hh_number: String
     ffg_id: String
     location: String!
-    tns_id: String!
+    tns_id: String
     status: String!
     farmer_trainer: String!
     business_advisor: String!
@@ -24,6 +24,7 @@ const ParticipantsTypeDefs = gql`
     primary_household_member: String
     create_in_commcare: String!
     coop_membership_number: String
+    number_of_coffee_plots: String
     phone_number: String
   }
 
@@ -47,6 +48,7 @@ const ParticipantsTypeDefs = gql`
   type UploadResponse {
     message: String!
     status: Int!
+    file: String
   }
 `;
 

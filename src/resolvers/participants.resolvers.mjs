@@ -2,6 +2,7 @@ import Projects from "../models/projects.models.mjs";
 import { join, parse } from "path";
 import fs, { createWriteStream } from "fs";
 import { getDirName } from "../utils/getDirName.mjs";
+import ExcelJS from "exceljs";
 
 const ParticipantsResolvers = {
   Query: {
@@ -28,7 +29,7 @@ const ParticipantsResolvers = {
             Training_Group__r.Project_Location__c, TNS_Id__c, Status__c, Trainer_Name__c, 
             Project__c, Training_Group__c, Training_Group__r.Responsible_Staff__r.ReportsToId, 
             Household__c, Primary_Household_Member__c, Create_In_CommCare__c, Other_ID_Number__c, 
-            Phone_Number__c FROM Participant__c 
+            Phone_Number__c, Number_of_Coffee_Plots__c FROM Participant__c 
            WHERE Project__c = '${project.project_name}' AND Status__c = 'Active' 
           ORDER BY TNS_Id__c Asc, Household__r.Name Asc`
         );
@@ -112,6 +113,7 @@ const ParticipantsResolvers = {
               create_in_commcare: participant.Create_In_CommCare__c,
               coop_membership_number: participant.Other_ID_Number__c,
               phone_number: participant.Phone_Number__c,
+              number_of_coffee_plots: participant.Number_of_Coffee_Plots__c,
             };
           }),
         };
@@ -259,9 +261,12 @@ const ParticipantsResolvers = {
         // Data Processing
         console.log("Processing data.................");
         const formattedHHData = formatHHData(fileData);
-        // console.log("formattedHHData", formattedHHData.slice(0, 1));
-        const groupedHHData = groupDataByHousehold(formattedHHData);
-        console.log("groupedHHData", groupedHHData.slice(0, 2));
+        const groupedHHData = await groupDataByHousehold(formattedHHData);
+
+        if (groupedHHData.status == 500) {
+          throw groupedHHData;
+        }
+
         const trainingGroupsMap = await matchFFGsWithSalesforceIds(
           sf_conn,
           groupedHHData
@@ -284,6 +289,8 @@ const ParticipantsResolvers = {
           recentHHData
         );
 
+        console.log(formattedPartData.slice(0, 2));
+
         console.log("Updating Participants.................");
         const partsResult = await updateParticipantsInSalesforce(
           sf_conn,
@@ -291,26 +298,26 @@ const ParticipantsResolvers = {
         );
 
         if (partsResult.status == 200) {
-          console.log("Updating Attendance.................");
-          const attendance = await updateAttendance(fileData, sf_conn);
+          // console.log("Updating Attendance.................");
+          // const attendance = await updateAttendance(fileData, sf_conn);
 
           // File Writing
           // const newFilename = await writeUploadedFile(stream, ext);
 
-          if (attendance.status == 200) {
-            return {
-              message: "Participants uploaded successfully",
-              status: 200,
-              //filename: newFilename,
-            };
-          } else {
-            throw {
-              status: attendance.status || 500,
-              message:
-                attendance.message ||
-                "An unkown error occured. Please contact the PIMA team.",
-            };
-          }
+          // if (attendance.status == 200) {
+          return {
+            message: "Participants uploaded successfully",
+            status: 200,
+            //filename: newFilename,
+          };
+          // } else {
+          //   throw {
+          //     status: attendance.status || 500,
+          //     message:
+          //       attendance.message ||
+          //       "An unkown error occured. Please contact the PIMA team.",
+          //   };
+          // }
         } else {
           throw {
             status: partsResult.status || 500,
@@ -322,13 +329,11 @@ const ParticipantsResolvers = {
 
         // console.log("hh result", hhResult);
       } catch (error) {
-        // Log the error
-        console.error("General Error", error);
-
         // Handle specific error cases
         return {
           message: error.message || "Unknow error occured",
           status: error.status || 500,
+          file: error.file || "",
         };
       }
     },
@@ -895,9 +900,9 @@ const updateAttendance = async (fileData, sf_conn) => {
 
     // Format data into arrays
     const formattedData = rows.map((row) => {
-      const slicedPart = row.split(",").slice(22);
-      const farmerSFId = row.split(",")[11];
-      const ffgId = row.split(",")[16];
+      const slicedPart = row.split(",").slice(23);
+      const farmerSFId = row.split(",")[12];
+      const ffgId = row.split(",")[17];
       return [farmerSFId, ffgId, ...slicedPart];
     });
 
@@ -1062,6 +1067,9 @@ const updateAttendance = async (fileData, sf_conn) => {
 
         if (attendanceValue !== "") {
           if (attendanceRecord) {
+            console.log(
+              `Updating for farmer with id ${farmerId} and attendance value ${attendanceValue} for module ${moduleId}`
+            );
             const attendanceValueSF =
               attendanceRecord.Status__c === "Present" ? "1" : "0";
             if (attendanceValue !== attendanceValueSF) {
@@ -1270,6 +1278,9 @@ function formatParticipantData(fileData, trainingGroupsMap, recentHHData) {
     ffg_id: "ffg_id",
     status: "Status__c",
     farmer_sf_id: "Participant__c",
+    national_identification_id: "Other_ID_Number__c",
+    coop_membership_number: "Other_ID_Number__c",
+    number_of_coffee_plots: "Number_of_Coffee_Plots__c",
   };
 
   // map data and headers for Participant__c
@@ -1287,6 +1298,8 @@ function formatParticipantData(fileData, trainingGroupsMap, recentHHData) {
     "Status__c",
     "Participant__c",
     "Household_Number__c",
+    "Other_ID_Number__c",
+    "Number_of_Coffee_Plots__c",
   ];
 
   const header = rows[0]
@@ -1361,71 +1374,89 @@ function formatParticipantData(fileData, trainingGroupsMap, recentHHData) {
   return formattedPartsDataWithHHId;
 }
 
-function groupDataByHousehold(formattedData) {
-  // group data by Household_Number__c and take the row with Primary_Household_Member__c = 'Yes',
-  // and get total number of rows in each group and assign total number to Number_of_Members__c
-
+async function groupDataByHousehold(formattedData) {
+  const errors = [];
   const groupedData = formattedData
     .filter((item) => item !== undefined)
     .reduce((acc, curr) => {
       const key = curr["Household_Number__c"] + "-" + curr["ffg_id"];
-
       if (!acc[key]) {
         acc[key] = [];
       }
-
       acc[key].push(curr);
-
       return acc;
     }, {});
 
-  const groupedDataArray = Object.values(groupedData);
+  const households = [];
 
-  const households = groupedDataArray.map((group) => {
+  Object.values(groupedData).forEach((group) => {
     const primaryMember = group.find(
       (member) => member["Primary_Household_Member__c"] === "Yes"
     );
-
     const secondaryMember = group.find(
       (member) => member["Primary_Household_Member__c"] === "No"
     );
 
     if (group.length === 2 && secondaryMember === undefined) {
-      throw new Error(
+      errors.push(
         `Household: ${group[0].Household_Number__c} has the same SF ID in both FFG: ${group[0].ffg_id} and FFG: ${group[1].ffg_id} If one is a new Household please leave the SF Id empty.`
       );
+      return;
     }
 
     if (
       group.length === 2 &&
       primaryMember.Household_Number__c !== secondaryMember.Household_Number__c
     ) {
-      throw new Error(
+      errors.push(
         `Household: ${group[0].Household_Number__c} / FFG ${group[0].ffg_id} has 2 households with different SF Ids.`
       );
+      return;
     }
 
     if (group.length > 2) {
-      throw new Error(
+      errors.push(
         `Household: ${group[0].Household_Number__c} FFG ${group[0].ffg_id} has more than 2 members`
       );
+      return;
     }
 
-    // Check if group has a primary member
     if (primaryMember) {
-      return {
+      households.push({
         ...primaryMember,
         Number_of_Members__c: group.length,
-      };
+      });
     } else {
-      throw new Error(
+      errors.push(
         `Household: ${group[0].Household_Number__c} FFG: ${group[0].ffg_id} does not have a primary member.`
       );
+      return;
     }
   });
-  //.filter((value) => value !== undefined);
+
+  if (errors.length > 0) {
+    const errorFileBase64 = await createErrorExcelFile(errors);
+    return {
+      status: 500,
+      message: "Validation errors found.",
+      file: errorFileBase64,
+    };
+  }
 
   return households;
+}
+
+async function createErrorExcelFile(errors) {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Errors");
+  worksheet.columns = [{ header: "Error", key: "error", width: 100 }];
+
+  errors.forEach((error) => {
+    worksheet.addRow({ error });
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return buffer.toString("base64");
 }
 
 async function matchFFGsWithSalesforceIds(sf_conn, groupedData) {
@@ -1689,9 +1720,9 @@ async function queryExistingParticipants(sf_conn, participantsData) {
   for (let i = 0; i < participantIds.length; i += batchSize) {
     const batchIds = participantIds.slice(i, i + batchSize);
     const queryResult = await sf_conn.query(
-      `SELECT Id, Name, Training_Group__c, TNS_Id__c, Resend_to_OpenFN__c, Create_In_CommCare__c, 
-          Check_Status__c, Middle_Name__c, Last_Name__c, Gender__c, Age__c, Primary_Household_Member__c, 
-          Household__c, Status__c
+      `SELECT Id, Name, Training_Group__c, TNS_Id__c, 
+          Middle_Name__c, Last_Name__c, Gender__c, Age__c, Primary_Household_Member__c, 
+          Household__c, Status__c, Other_ID_Number__c, Number_of_Coffee_Plots__c
         FROM Participant__c WHERE Id IN ('${batchIds.join("','")}')`
     );
     participantRecords.push(...queryResult.records);
@@ -1825,6 +1856,10 @@ function didParticipantValuesChange(sfParticipant, itemToInsert) {
       itemToInsert.Primary_Household_Member__c &&
     sfParticipant.Household__c === itemToInsert.Household__c &&
     sfParticipant.Status__c === itemToInsert.Status__c &&
+    sfParticipant.Gender__c === itemToInsert.Gender__c &&
+    sfParticipant.Other_ID_Number__c === itemToInsert.Other_ID_Number__c &&
+    sfParticipant.Number_of_Coffee_Plots__c ===
+      itemToInsert.Number_of_Coffee_Plots__c &&
     middleNameComparison && // Include the modified comparison for Middle_Name__c
     lastNameComparison // Include the modified comparison for Last_Name__c
   );
