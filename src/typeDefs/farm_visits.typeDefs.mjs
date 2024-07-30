@@ -38,7 +38,7 @@ const FarmVisitsTypeDefs = gql`
     gender: String!
     fieldAge: Int
     curedas: String
-    separateFields: Int
+    separateFields: String
     ffg_tns_id: String!
     ffg_name: String!
     farmer_tns_id: String!
