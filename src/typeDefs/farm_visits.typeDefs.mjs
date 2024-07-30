@@ -13,6 +13,8 @@ const FarmVisitsTypeDefs = gql`
     has_training: String!
     date_visited: String!
     status: String
+    pima_household_id: String
+    pima_farmer_id: String
     qas: [QA]
   }
 

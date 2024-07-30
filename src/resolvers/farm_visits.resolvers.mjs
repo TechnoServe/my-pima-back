@@ -37,7 +37,7 @@ const FarmVisitsResolvers = {
         let farmVisits = [];
 
         let result = await sf_conn.query(
-          "SELECT Id, Name, Training_Group__r.Name, Training_Group__r.TNS_Id__c, Training_Session__r.Name, Farm_Visited__r.Name, Household_PIMA_ID__c, Farmer_Trainer__r.Name, Visit_Has_Training__c, Date_Visited__c FROM Farm_Visit__c WHERE Training_Group__c IN ('" +
+          "SELECT Id, Name, Training_Group__r.Name, Training_Group__r.TNS_Id__c, Training_Session__r.Name, Farm_Visited__r.Name, Household_PIMA_ID__c, Farmer_Trainer__r.Name, Visit_Has_Training__c, Date_Visited__c, Farm_Visited__c, Farm_Visited__r.Household__c FROM Farm_Visit__c WHERE Training_Group__c IN ('" +
             tg_ids.join("','") +
             "')"
         );
@@ -77,6 +77,8 @@ const FarmVisitsResolvers = {
               farmer_trainer: fv.Farmer_Trainer__r.Name || "N/A",
               has_training: fv.Visit_Has_Training__c || "No",
               date_visited: fv.Date_Visited__c,
+              pima_household_id: fv.Farm_Visited__c,
+              pima_farmer_id: fv.Farm_Visited__r.Household__c
             };
           }),
         };
