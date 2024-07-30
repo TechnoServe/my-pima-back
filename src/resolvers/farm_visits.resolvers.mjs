@@ -513,7 +513,10 @@ const FarmVisitsResolvers = {
               : "No";
 
             let WeedingPass = "No";
-            if (visitType === "Farm Visit Full - KE") {
+            if (
+              visitType === "Farm Visit Full - KE" ||
+              visitType === "Farm Visit Full - PR"
+            ) {
               if (
                 bp.WeedsCanopy !==
                   "Many large weeds under the tree canopy (ground is covered with weeds)" &&
@@ -550,7 +553,8 @@ const FarmVisitsResolvers = {
               "Nearly all leaves are dark green and less than 5% (less than 5 in 100) are yellow, pale green, or brown.";
 
             if (
-              visitType === "Farm Visit Full - KE" &&
+              (visitType === "Farm Visit Full - PR" ||
+                visitType === "Farm Visit Full - KE") &&
               nutritionPassCount >= 2 &&
               isLeavesColorDarkGreen
             ) {
@@ -587,11 +591,12 @@ const FarmVisitsResolvers = {
             const filteredIpdmMethodsArray = ipdmMethodsArray.filter(
               (method) => method !== "Does not know any methods"
             );
-            
-            const IPDMPass = filteredIpdmMethodsArray.length >= 3 ? "Yes" : "No";
+
+            const IPDMPass =
+              filteredIpdmMethodsArray.length >= 3 ? "Yes" : "No";
 
             let PruningPass = "No";
-            if (visitType === "Farm Visit Full - KE") {
+            if (visitType === "Farm Visit Full - KE" || visitType === 'Farm Visit Full - PR') {
               const passCount = pruningMethodsArray.filter(
                 (method) =>
                   method !== "N/A" && method !== "No pruning methods used"

@@ -305,11 +305,11 @@ const ParticipantsResolvers = {
           // const newFilename = await writeUploadedFile(stream, ext);
 
           // if (attendance.status == 200) {
-          return {
-            message: "Participants uploaded successfully",
-            status: 200,
-            //filename: newFilename,
-          };
+            return {
+              message: "Participants uploaded successfully",
+              status: 200,
+              //filename: newFilename,
+            };
           // } else {
           //   throw {
           //     status: attendance.status || 500,
