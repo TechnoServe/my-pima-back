@@ -305,11 +305,11 @@ const ParticipantsResolvers = {
           // const newFilename = await writeUploadedFile(stream, ext);
 
           // if (attendance.status == 200) {
-            return {
-              message: "Participants uploaded successfully",
-              status: 200,
-              //filename: newFilename,
-            };
+          return {
+            message: "Participants uploaded successfully",
+            status: 200,
+            //filename: newFilename,
+          };
           // } else {
           //   throw {
           //     status: attendance.status || 500,
@@ -1409,7 +1409,7 @@ async function groupDataByHousehold(formattedData) {
       primaryMember.Household_Number__c !== secondaryMember.Household_Number__c
     ) {
       errors.push(
-        `Household: ${group[0].Household_Number__c} / FFG ${group[0].ffg_id} has 2 households with different SF Ids.`
+        `SF Household: ${group[0].Household_Number__c} / FFG ${group[0].ffg_id} has 2 households with different SF Ids.`
       );
       return;
     }
@@ -1427,10 +1427,10 @@ async function groupDataByHousehold(formattedData) {
         Number_of_Members__c: group.length,
       });
     } else {
+      console.log(group);
       errors.push(
         `Household: ${group[0].Household_Number__c} FFG: ${group[0].ffg_id} does not have a primary member.`
       );
-      return;
     }
   });
 
@@ -1611,9 +1611,10 @@ async function updateParticipantsInSalesforce(sf_conn, formattedData) {
       } else if (
         !didParticipantValuesChange(matchingParticipant, itemToInsert)
       ) {
-        // console.log("Values changed");
-        // console.log(matchingParticipant);
-        // console.log(itemToInsert);
+        console.log("Values changed");
+        console.log(matchingParticipant);
+        console.log(itemToInsert);
+        console.log("Changed? Yes");
         return true;
       } else {
         return false;
@@ -1847,6 +1848,11 @@ function didParticipantValuesChange(sfParticipant, itemToInsert) {
     (sfLastNameIsNull && itemLastNameIsEmpty) || // Both are null/empty
     sfParticipant.Last_Name__c === itemToInsert.Last_Name__c; // Normal comparison
 
+  const normalize = (value) => (value === null ? "" : value);
+
+  const sfOtherIdIsNull = normalize(sfParticipant.Other_ID_Number__c);
+  const itemOtherIdIsEmpty = normalize(itemToInsert.Other_ID_Number__c);
+
   return (
     sfParticipant.Name === itemToInsert.Name &&
     sfParticipant.Training_Group__c === itemToInsert.Training_Group__c &&
@@ -1857,11 +1863,11 @@ function didParticipantValuesChange(sfParticipant, itemToInsert) {
     sfParticipant.Household__c === itemToInsert.Household__c &&
     sfParticipant.Status__c === itemToInsert.Status__c &&
     sfParticipant.Gender__c === itemToInsert.Gender__c &&
-    sfParticipant.Other_ID_Number__c === itemToInsert.Other_ID_Number__c &&
     sfParticipant.Number_of_Coffee_Plots__c ===
-      itemToInsert.Number_of_Coffee_Plots__c &&
+      parseInt(itemToInsert.Number_of_Coffee_Plots__c) &&
     middleNameComparison && // Include the modified comparison for Middle_Name__c
-    lastNameComparison // Include the modified comparison for Last_Name__c
+    lastNameComparison && // Include the modified comparison for Last_Name__c
+    sfOtherIdIsNull === itemOtherIdIsEmpty
   );
 }
 
