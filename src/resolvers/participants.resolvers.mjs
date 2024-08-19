@@ -63,9 +63,7 @@ const ParticipantsResolvers = {
             return {
               p_id: participant.Id,
               first_name: participant.Name,
-              middle_name: participant.Middle_Name__c
-                ? participant.Middle_Name__c
-                : "null",
+              middle_name: participant.Middle_Name__c,
               last_name: participant.Last_Name__c,
               age: participant.Age__c,
               coffee_tree_numbers: participant.Household__c
@@ -1171,10 +1169,8 @@ async function readFileData(stream) {
   });
 }
 
-// Parse CSV data into formatted data.
 function formatHHData(fileData) {
-  //const rows = fileData.trim().split("\n");
-  const rows = fileData.toString().split("\n");
+  const rows = fileData.toString().split("\n").filter(Boolean); // Filter out empty lines
   if (rows.length === 0) {
     throw new Error("No data found in the CSV file.");
   }
@@ -1196,13 +1192,13 @@ function formatHHData(fileData) {
     farmer_sf_id: "Participant__c",
   };
 
-  // From the CSV we only need to get these data to update the household object on SALESFORCE.
   const REQUIRED_COLUMNS = [
     "Farm_Size__c",
     "ffg_id",
     "Household_Number__c",
     "Primary_Household_Member__c",
     "Household__c",
+    "Status__c", // Add Status__c to track its presence
   ];
 
   const header = rows[0]
@@ -1214,45 +1210,56 @@ function formatHHData(fileData) {
     return map;
   }, {});
 
-  const formattedData = rows.slice(1).map((row) => {
-    if (row.trim() !== "") {
+  const formattedData = rows.slice(1).reduce((acc, row) => {
+    if (row.trim()) {
       const values = row.split(",");
       const formattedRow = {};
 
       REQUIRED_COLUMNS.forEach((column) => {
         const index = columnIndexMap[column];
-        const value = values[index].replace(/"/g, "");
+        if (index !== -1) {
+          let value = values[index].replace(/"/g, "").trim();
 
-        if (
-          column === "Primary_Household_Member__c" &&
-          (value === "1" || value === "2")
-        ) {
-          formattedRow[column] = value === "1" ? "Yes" : "No";
-        } else if (column === "Farm_Size__c" && value === "null") {
-          formattedRow[column] = "";
-        } else {
-          formattedRow[column] = value;
+          // Handling specific column transformations
+          if (column === "Primary_Household_Member__c") {
+            formattedRow[column] =
+              value === "1" ? "Yes" : value === "2" ? "No" : value;
+          } else if (column === "Farm_Size__c") {
+            // If Farm_Size__c is "null" or 0, return null
+            formattedRow[column] =
+              value === "null" || value === "0" ? null : value;
+          } else {
+            formattedRow[column] = value;
+          }
         }
       });
 
-      // Check if Household_Number__c is less than 10
-      if (parseInt(values[columnIndexMap["Household_Number__c"]], 10) < 10) {
-        // Prepend '0' to formattedRow["Name"]
-        formattedRow["Name"] =
-          "0" + values[columnIndexMap["Household_Number__c"]].replace(/"/g, "");
-      } else {
-        // If Household_Number__c is 10 or greater, directly assign the value to formattedRow["Name"]
-        formattedRow["Name"] = values[
-          columnIndexMap["Household_Number__c"]
-        ].replace(/"/g, "");
+      if (
+        formattedRow["Status__c"] &&
+        formattedRow["Status__c"].toLowerCase() === "inactive"
+      ) {
+        return acc;
       }
-      formattedRow["Name"] = values[
-        columnIndexMap["Household_Number__c"]
-      ].replace(/"/g, "");
 
-      return formattedRow;
+      // Format the Household_Number__c correctly
+      let householdNumber = values[columnIndexMap["Household_Number__c"]].replace(/"/g, "").trim();
+
+      // Remove any leading zeros first
+      householdNumber = householdNumber.replace(/^0+/, '');
+
+      // Prepend '0' only if it's less than 10
+      if (parseInt(householdNumber, 10) < 10) {
+        formattedRow["Name"] = '0' + householdNumber;
+      } else {
+        formattedRow["Name"] = householdNumber;
+      }
+
+      formattedRow["Household_Number__c"] = parseInt(householdNumber);  // Store cleaned-up number
+
+      acc.push(formattedRow);
     }
-  });
+    return acc;
+  }, []);
 
   return formattedData;
 }
@@ -1331,6 +1338,9 @@ function formatParticipantData(fileData, trainingGroupsMap, recentHHData) {
           formattedRow[column] = "Yes";
         } else if (column === "Primary_Household_Member__c" && value === "2") {
           formattedRow[column] = "No";
+        } else if (column === "Number_of_Coffee_Plots__c") {
+          formattedRow[column] =
+            value === "null" || value === "0" ? null : value;
         } else {
           formattedRow[column] = value != "null" ? value : "";
         }
@@ -1813,8 +1823,17 @@ async function executeHHResult(sf_conn, filteredHHDataToInsert) {
 }
 
 function didHouseholdValuesChange(sfHousehold, itemToInsert) {
+  let farmSize = null;
+  if (itemToInsert.Farm_Size__c !== null) {
+    if (parseInt(itemToInsert.Farm_Size__c) === 0) {
+      farmSize = null;
+    } else {
+      farmSize = parseInt(itemToInsert.Farm_Size__c);
+    }
+  }
+
   return (
-    sfHousehold.Farm_Size__c === parseInt(itemToInsert.Farm_Size__c) &&
+    sfHousehold.Farm_Size__c === farmSize &&
     sfHousehold.Name === itemToInsert.Name &&
     sfHousehold.Number_of_Members__c === itemToInsert.Number_of_Members__c &&
     sfHousehold.Training_Group__c === itemToInsert.Training_Group__c
@@ -1825,7 +1844,8 @@ function didParticipantValuesChange(sfParticipant, itemToInsert) {
   // Check if Middle_Name__c in sfParticipant is null or undefined
   const sfMiddleNameIsNull =
     sfParticipant.Middle_Name__c === null ||
-    sfParticipant.Middle_Name__c === undefined;
+    sfParticipant.Middle_Name__c === undefined ||
+    sfParticipant.Middle_Name__c === "";
 
   // Check if Middle_Name__c in itemToInsert is an empty string
   const itemMiddleNameIsEmpty = itemToInsert.Middle_Name__c === "";
@@ -1838,7 +1858,8 @@ function didParticipantValuesChange(sfParticipant, itemToInsert) {
   // Check if Last_Name__c in sfParticipant is null or undefined
   const sfLastNameIsNull =
     sfParticipant.Last_Name__c === null ||
-    sfParticipant.Last_Name__c === undefined;
+    sfParticipant.Last_Name__c === undefined ||
+    sfParticipant.Middle_Name__c === "";
 
   // Check if Last_Name__c in itemToInsert is an empty string
   const itemLastNameIsEmpty = itemToInsert.Last_Name__c === "";
@@ -1853,6 +1874,16 @@ function didParticipantValuesChange(sfParticipant, itemToInsert) {
   const sfOtherIdIsNull = normalize(sfParticipant.Other_ID_Number__c);
   const itemOtherIdIsEmpty = normalize(itemToInsert.Other_ID_Number__c);
 
+  let numberOfTrees = null;
+
+  if (itemToInsert.Number_of_Coffee_Plots__c !== null) {
+    if (parseInt(itemToInsert.Number_of_Coffee_Plots__c) === 0) {
+      numberOfTrees = null;
+    } else {
+      numberOfTrees = parseInt(itemToInsert.Number_of_Coffee_Plots__c);
+    }
+  }
+
   return (
     sfParticipant.Name === itemToInsert.Name &&
     sfParticipant.Training_Group__c === itemToInsert.Training_Group__c &&
@@ -1863,8 +1894,7 @@ function didParticipantValuesChange(sfParticipant, itemToInsert) {
     sfParticipant.Household__c === itemToInsert.Household__c &&
     sfParticipant.Status__c === itemToInsert.Status__c &&
     sfParticipant.Gender__c === itemToInsert.Gender__c &&
-    sfParticipant.Number_of_Coffee_Plots__c ===
-      parseInt(itemToInsert.Number_of_Coffee_Plots__c) &&
+    sfParticipant.Number_of_Coffee_Plots__c === numberOfTrees &&
     middleNameComparison && // Include the modified comparison for Middle_Name__c
     lastNameComparison && // Include the modified comparison for Last_Name__c
     sfOtherIdIsNull === itemOtherIdIsEmpty

@@ -78,7 +78,7 @@ const FarmVisitsResolvers = {
               has_training: fv.Visit_Has_Training__c || "No",
               date_visited: fv.Date_Visited__c,
               pima_household_id: fv.Farm_Visited__c,
-              pima_farmer_id: fv.Farm_Visited__r.Household__c
+              pima_farmer_id: fv.Farm_Visited__r.Household__c,
             };
           }),
         };
@@ -598,7 +598,10 @@ const FarmVisitsResolvers = {
               filteredIpdmMethodsArray.length >= 3 ? "Yes" : "No";
 
             let PruningPass = "No";
-            if (visitType === "Farm Visit Full - KE" || visitType === 'Farm Visit Full - PR') {
+            if (
+              visitType === "Farm Visit Full - KE" ||
+              visitType === "Farm Visit Full - PR"
+            ) {
               const passCount = pruningMethodsArray.filter(
                 (method) =>
                   method !== "N/A" && method !== "No pruning methods used"
@@ -994,45 +997,10 @@ const FarmVisitsResolvers = {
       { sf_conn }
     ) => {
       try {
-        // Query to fetch Training Groups based on Project ID
-        const groupsQuery = await sf_conn.query(
-          `SELECT Id FROM Training_Group__c WHERE Project__c = '${project_id}' LIMIT 1`
-        );
+        const tg_ids = await getTrainingGroupIds(sf_conn, project_id);
+        const fields = getFieldsByPracticeName(practice_name);
 
-        // If no groups found, throw error or handle appropriately
-        if (groupsQuery.totalSize === 0) {
-          throw new Error("Training Groups not found");
-        }
-
-        // Extract Training Group IDs
-        const tg_ids = groupsQuery.records.map((group) => group.Id);
-
-        // Convert IDs to string for query
         const tg_ids_string = tg_ids.map((id) => `'${id}'`).join(", ");
-
-        let fields = [];
-
-        switch (practice_name) {
-          case "Compost":
-            fields.push({
-              field: "Do_you_have_compost_manure__c",
-              question: "Do you have compost manure?",
-              picture: "photo_of_the_compost_manure__c",
-              isVerified: "Compost_Manure_Photo_Status__c",
-            });
-            break;
-          case "Record Book":
-            fields.push({
-              field: "are_there_records_on_the_record_book__c",
-              question: "Are there records on the record book?",
-              picture: "take_a_photo_of_the_record_book__c",
-              isVerified: "Record_Book_Photo_Status__c",
-            });
-            break;
-          case "Erosion Control":
-            break;
-        }
-
         const fields_bp_string = fields.map((field) => field.field).join(", ");
         const fields_picture_string = fields
           .map((field) => field.picture)
@@ -1041,7 +1009,6 @@ const FarmVisitsResolvers = {
           .map((field) => field.isVerified)
           .join(", ");
 
-        // Query to fetch Best Practices for Farm Visits within selected Training Groups
         const query = `
           SELECT Id, Name, Best_Practice_Adoption__c, Farm_Visit__c,
                  Farm_Visit__r.Name, Farm_Visit__r.Training_Group__r.Name,
@@ -1054,118 +1021,26 @@ const FarmVisitsResolvers = {
                  ${fields_picture_string},
                  ${fields_status_string}
           FROM FV_Best_Practices__c 
-          WHERE Farm_Visit__r.Training_Group__c IN (${tg_ids_string}) LIMIT 5
+          WHERE Farm_Visit__r.Training_Group__c IN (${tg_ids_string})
         `;
 
-        console.log(query);
-
-        // Execute the query to fetch farm visits data
         const result = await sf_conn.query(query);
 
-        // If no farm visits found, throw error or handle appropriately
         if (result.totalSize === 0) {
           throw new Error("Farm Visits not found");
         }
 
-        // Map fetched data to an array of objects
-        const farmVisits = result.records.map(async (bp) => {
-          const visit = {
-            "Farmer PIMA ID": bp.Farm_Visit__r.Farm_Visited__c,
-            "Farmer TNS ID": bp.Farm_Visit__r.Farm_Visited__r.TNS_Id__c,
-            "Date Visited": bp.Farm_Visit__r.Date_Visited__c,
-            "Farmer Name": bp.Farm_Visit__r.Farm_Visited__r.Name,
-            "Farmer Trainer": bp.Farm_Visit__r.Farmer_Trainer__r.Name,
-            "Correct Answer": "",
-          };
+        const resolvedFarmVisits = await Promise.all(
+          result.records.map((bp) =>
+            processFarmVisit(bp, fields, practice_name)
+          )
+        );
 
-          for (const field of fields) {
-            visit[`${practice_name}: ${field.question}`] = bp[field.field];
-            visit[
-              `${practice_name}: Review: Correct Answer? (not_approved/approved/invalid)`
-            ] = bp[field.isVerified];
-            visit[`${practice_name}: ${field.picture}`] =
-              await fetchImageWithRetry(bp[field.picture]);
-          }
-
-          return visit;
-        });
-
-        // Wait for all async operations to complete
-        const resolvedFarmVisits = await Promise.all(farmVisits);
-
-        // Create a new workbook
-        const workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet("Farm Visits");
-
-        // Set headers dynamically
-        const columns = [
-          { header: "Farmer PIMA ID", key: "Farmer PIMA ID", width: 30 },
-          { header: "Farmer TNS ID", key: "Farmer TNS ID", width: 30 },
-          { header: "Date Visited", key: "Date Visited", width: 30 },
-          { header: "Farmer Name", key: "Farmer Name", width: 30 },
-          { header: "Farmer Trainer", key: "Farmer Trainer", width: 30 },
-          { header: "Correct Answer", key: "Correct Answer", width: 30 },
-        ];
-
-        fields.forEach((field) => {
-          columns.push({
-            header: `${practice_name}: ${field.question}`,
-            key: `${practice_name}: ${field.question}`,
-            width: 30,
-          });
-          columns.push({
-            header: `${practice_name} Review: Correct Answer? (not_approved/approved/invalid)`,
-            key: `${practice_name}: Review: Correct Answer? (not_approved/approved/invalid)`,
-            width: 30,
-          });
-          columns.push({
-            header: `${practice_name}: ${field.picture}`,
-            key: `${practice_name}: ${field.picture}`,
-            width: 30,
-          });
-        });
-
-        worksheet.columns = columns;
-
-        // Set row height
-        worksheet.eachRow((row, rowNumber) => {
-          row.height = 300;
-        });
-
-        // Add rows
-        resolvedFarmVisits.forEach((visit, index) => {
-          worksheet.addRow(visit);
-
-          // Add images if available
-          fields.forEach((field) => {
-            const imageData = visit[`${practice_name}: ${field.picture}`];
-            if (imageData) {
-              try {
-                const imageId = workbook.addImage({
-                  base64: imageData.replace("data:image/png;base64,", ""),
-                  extension: "png",
-                });
-
-                // Add image to the worksheet
-                worksheet.addImage(imageId, {
-                  tl: {
-                    col: columns.findIndex(
-                      (col) => col.key === `${practice_name}: ${field.picture}`
-                    ),
-                    row: index + 2,
-                  },
-                  ext: { width: 300, height: 300 },
-                });
-              } catch (error) {
-                console.error(
-                  `Error adding image for ${visit["Farm Visit ID"]}: ${error.message}`
-                );
-              }
-            }
-          });
-        });
-
-        // Convert workbook to buffer
+        const workbook = createWorkbook(
+          resolvedFarmVisits,
+          fields,
+          practice_name
+        );
         const buffer = await workbook.xlsx.writeBuffer();
 
         return {
@@ -1175,7 +1050,7 @@ const FarmVisitsResolvers = {
         };
       } catch (err) {
         console.error("Error creating Excel file:", err);
-        throw err; // Handle error as needed in your application
+        throw err;
       }
     },
   },
@@ -1219,5 +1094,130 @@ const fetchImageWithRetry = async (imageUrl, retries = 3) => {
     }
   }
 };
+
+const getTrainingGroupIds = async (sf_conn, project_id) => {
+  const groupsQuery = await sf_conn.query(
+    `SELECT Id FROM Training_Group__c WHERE Project__c = '${project_id}' LIMIT 100`
+  );
+
+  if (groupsQuery.totalSize === 0) {
+    throw new Error("Training Groups not found");
+  }
+
+  return groupsQuery.records.map((group) => group.Id);
+};
+
+const getFieldsByPracticeName = (practice_name) => {
+  switch (practice_name) {
+    case "Compost":
+      return [
+        {
+          field: "Do_you_have_compost_manure__c",
+          question: "Do you have compost manure?",
+          picture: "photo_of_the_compost_manure__c",
+          isVerified: "Compost_Manure_Photo_Status__c",
+        },
+      ];
+    case "Record Book":
+      return [
+        {
+          field: "are_there_records_on_the_record_book__c",
+          question: "Are there records on the record book?",
+          picture: "take_a_photo_of_the_record_book__c",
+          isVerified: "Record_Book_Photo_Status__c",
+        },
+      ];
+    // Add more cases as needed
+    default:
+      throw new Error("Invalid practice name");
+  }
+};
+
+const processFarmVisit = async (bp, fields, practice_name) => {
+  const visit = {
+    "Farmer PIMA ID": bp.Farm_Visit__r.Household_PIMA_ID__c,
+    "Farmer TNS ID": bp.Farm_Visit__r.Farm_Visited__r.TNS_Id__c,
+    "Date Visited": bp.Farm_Visit__r.Date_Visited__c,
+    "Farmer Name": bp.Farm_Visit__r.Farm_Visited__r.Name,
+    "Farmer Trainer": bp.Farm_Visit__r.Farmer_Trainer__r.Name,
+    "Correct Answer": "",
+  };
+
+  for (const field of fields) {
+    visit[`${practice_name}: ${field.question}`] = bp[field.field];
+    visit[
+      `${practice_name}: Review: Correct Answer? (not_approved/approved/invalid)`
+    ] = bp[field.isVerified];
+    visit[`${practice_name}: ${field.picture}`] = await fetchImageWithRetry(
+      bp[field.picture]
+    );
+  }
+
+  return visit;
+};
+
+const createWorkbook = (resolvedFarmVisits, fields, practice_name) => {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Farm Visits");
+
+  const columns = [
+    { header: "Farmer PIMA ID", key: "Farmer PIMA ID", width: 30 },
+    { header: "Farmer TNS ID", key: "Farmer TNS ID", width: 30 },
+    { header: "Date Visited", key: "Date Visited", width: 30 },
+    { header: "Farmer Name", key: "Farmer Name", width: 30 },
+    { header: "Farmer Trainer", key: "Farmer Trainer", width: 30 },
+    { header: "Correct Answer", key: "Correct Answer", width: 30 },
+  ];
+
+  fields.forEach((field) => {
+    columns.push({
+      header: `${practice_name}: ${field.question}`,
+      key: `${practice_name}: ${field.question}`,
+      width: 30,
+    });
+    columns.push({
+      header: `${practice_name} Review: Correct Answer? (not_approved/approved/invalid)`,
+      key: `${practice_name}: Review: Correct Answer? (not_approved/approved/invalid)`,
+      width: 30,
+    });
+    columns.push({
+      header: `${practice_name}: ${field.picture}`,
+      key: `${practice_name}: ${field.picture}`,
+      width: 30,
+    });
+  });
+
+  worksheet.columns = columns;
+
+  resolvedFarmVisits.forEach((visit, index) => {
+    const row = worksheet.addRow(visit);
+    row.height = 100; // Adjust row height for better image alignment
+
+    fields.forEach((field) => {
+      const imageData = visit[`${practice_name}: ${field.picture}`];
+      if (imageData && imageData.startsWith("data:image")) {
+        try {
+          const imageId = workbook.addImage({
+            base64: imageData.replace(/^data:image\/(png|jpg|jpeg);base64,/, ""),
+            extension: "png", // Use correct extension based on image type
+          });
+
+          worksheet.addImage(imageId, {
+            tl: { col: columns.findIndex(col => col.key === `${practice_name}: ${field.picture}`), row: row.number - 1 },
+            ext: { width: 100, height: 100 }, // Adjust width and height as necessary
+          });
+
+          // Remove the plain text base64 from the cell to avoid confusion
+          worksheet.getCell(`${row.getCell(columns.findIndex(col => col.key === `${practice_name}: ${field.picture}`) + 1).address}`).value = null;
+        } catch (error) {
+          console.error(`Error adding image for ${visit["Farmer PIMA ID"]}: ${error.message}`);
+        }
+      }
+    });
+  });
+
+  return workbook;
+};
+
 
 export default FarmVisitsResolvers;
