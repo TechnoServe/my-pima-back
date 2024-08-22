@@ -43,6 +43,7 @@ import TrainingModulesTypeDefs from "./src/typeDefs/training_modules.typeDefs.mj
 import TrainingModulesResolvers from "./src/resolvers/training_modules.resolvers.mjs";
 import PerformanceResolvers from "./src/resolvers/performance.resolvers.mjs";
 import PerformanceTypeDefs from "./src/typeDefs/performance.typeDefs.mjs";
+import { sampleFarmVisits } from "./src/services/farmVisit.service.mjs";
 
 const app = express();
 
@@ -92,10 +93,6 @@ app.use("/uploads", express.static(uploadsDirectory));
 
 app.use(graphqlUploadExpress());
 
-app.get("/api", (req, res) => {
-  res.send("Hello, My PIMA API Service!");
-});
-
 var conn = new jsforce.Connection({
   // you can change loginUrl to connect to sandbox or prerelease env.
   loginUrl: creds.sf_url,
@@ -118,6 +115,11 @@ conn.login(
     console.log("Salesforce : JSForce Connection is established!");
   }
 );
+
+app.get("/api", async(req, res) => {
+  await sampleFarmVisits(conn);
+  res.send("Hello, My PIMA API Service!");
+});
 
 const server = new ApolloServer({
   typeDefs: [
@@ -170,40 +172,10 @@ server
     server.applyMiddleware({ app });
 
     // Define a cron job to fetch data from the remote database and update the local database
-    const fetchDataJob = new cron.CronJob("0 0 */24 * * *", async () => {
-      await loadSFProjects(conn);
-
-      // get trainings data
-      conn.query(
-        "SELECT Id, Name,TNS_Id__c, Active_Participants_Count__c, Responsible_Staff__c FROM Training_Group__c",
-        function (err, result) {
-          if (err) {
-            return console.error(err);
-          }
-          cacheTrainingGroups(result, redis);
-        }
-      );
-      conn.query(
-        "SELECT Id, Name, Module_Name__c, Training_Group__c, Session_Status__c, Male_Attendance__c, Female_Attendance__c, Trainer__c  FROM Training_Session__c",
-        function (err, result) {
-          if (err) {
-            return console.error(err);
-          }
-          cacheTrainingSessions(result, redis);
-        }
-      );
-      conn.query(
-        "SELECT Id, Name, Farm_Visit__c, Participant__c, Participant_Gender__c, Status__c,	Training_Session__c, Date__c FROM FV_Attendance__c",
-        function (err, result) {
-          if (err) {
-            return console.error(err);
-          }
-          cacheTrainingParticipants(result, redis);
-        }
-      );
-
-      pubSub.publish("dataUpdated", { dataUpdated: true });
-    });
+    // const fetchDataJob = new cron.CronJob("0 0 */24 * * *", async () => {
+    //   // await loadSFProjects(conn);
+    //   pubSub.publish("dataUpdated", { dataUpdated: true });
+    // });
 
     // Start the cron job
     // fetchDataJob.start();
