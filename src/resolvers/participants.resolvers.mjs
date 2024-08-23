@@ -29,7 +29,7 @@ const ParticipantsResolvers = {
             Training_Group__r.Project_Location__c, TNS_Id__c, Status__c, Trainer_Name__c, 
             Project__c, Training_Group__c, Training_Group__r.Responsible_Staff__r.ReportsToId, 
             Household__c, Primary_Household_Member__c, Create_In_CommCare__c, Other_ID_Number__c, 
-            Phone_Number__c, Number_of_Coffee_Plots__c FROM Participant__c 
+            Phone_Number__c, Number_of_Coffee_Plots__c, Household__r.Number_of_Coffee_Plots__c FROM Participant__c 
            WHERE Project__c = '${project.project_name}' AND Status__c = 'Active' 
           ORDER BY TNS_Id__c Asc, Household__r.Name Asc`
         );
@@ -56,6 +56,8 @@ const ParticipantsResolvers = {
           sf_conn.query(`SELECT Id, Name FROM Contact`),
         ]);
 
+        console.log("example participant", participants.slice(0, 5));
+
         return {
           message: "Participants fetched successfully",
           status: 200,
@@ -68,10 +70,10 @@ const ParticipantsResolvers = {
               age: participant.Age__c,
               coffee_tree_numbers: participant.Household__c
                 ? participant.Household__r.Farm_Size__c
-                : null,
+                : "ERROR HERE! Please report to the PIMA team",
               hh_number: participant.Household__c
                 ? participant.Household__r.Name
-                : null,
+                : "ERROR HERE! Please report to the PIMA team",
               ffg_id: participant.Training_Group__r.TNS_Id__c,
               gender: participant.Gender__c,
               location:
@@ -111,7 +113,11 @@ const ParticipantsResolvers = {
               create_in_commcare: participant.Create_In_CommCare__c,
               coop_membership_number: participant.Other_ID_Number__c,
               phone_number: participant.Phone_Number__c,
-              number_of_coffee_plots: participant.Number_of_Coffee_Plots__c,
+              number_of_coffee_plots: participant.Household__c
+                ? participant.Household__r.Number_of_Coffee_Plots__c === ""
+                  ? participant.Number_of_Coffee_Plots__c
+                  : participant.Household__r.Number_of_Coffee_Plots__c
+                : "ERROR HERE! Please report to the PIMA team",
             };
           }),
         };
@@ -1190,6 +1196,7 @@ function formatHHData(fileData) {
     ffg_id: "ffg_id",
     status: "Status__c",
     farmer_sf_id: "Participant__c",
+    number_of_coffee_plots: "Number_of_Coffee_Plots__c",
   };
 
   const REQUIRED_COLUMNS = [
@@ -1198,7 +1205,8 @@ function formatHHData(fileData) {
     "Household_Number__c",
     "Primary_Household_Member__c",
     "Household__c",
-    "Status__c", // Add Status__c to track its presence
+    "Status__c",
+    "Number_of_Coffee_Plots__c",
   ];
 
   const header = rows[0]
@@ -1225,9 +1233,9 @@ function formatHHData(fileData) {
             formattedRow[column] =
               value === "1" ? "Yes" : value === "2" ? "No" : value;
           } else if (column === "Farm_Size__c") {
-            // If Farm_Size__c is "null" or 0, return null
-            formattedRow[column] =
-              value === "null" || value === "0" ? null : value;
+            formattedRow[column] = value === "null" ? null : value;
+          } else if (column === "Number_of_Coffee_Plots__c") {
+            formattedRow[column] = value === "null" ? null : value;
           } else {
             formattedRow[column] = value;
           }
@@ -1242,19 +1250,21 @@ function formatHHData(fileData) {
       }
 
       // Format the Household_Number__c correctly
-      let householdNumber = values[columnIndexMap["Household_Number__c"]].replace(/"/g, "").trim();
+      let householdNumber = values[columnIndexMap["Household_Number__c"]]
+        .replace(/"/g, "")
+        .trim();
 
       // Remove any leading zeros first
-      householdNumber = householdNumber.replace(/^0+/, '');
+      householdNumber = householdNumber.replace(/^0+/, "");
 
       // Prepend '0' only if it's less than 10
       if (parseInt(householdNumber, 10) < 10) {
-        formattedRow["Name"] = '0' + householdNumber;
+        formattedRow["Name"] = "0" + householdNumber;
       } else {
         formattedRow["Name"] = householdNumber;
       }
 
-      formattedRow["Household_Number__c"] = parseInt(householdNumber);  // Store cleaned-up number
+      formattedRow["Household_Number__c"] = parseInt(householdNumber); // Store cleaned-up number
 
       acc.push(formattedRow);
     }
@@ -1339,8 +1349,7 @@ function formatParticipantData(fileData, trainingGroupsMap, recentHHData) {
         } else if (column === "Primary_Household_Member__c" && value === "2") {
           formattedRow[column] = "No";
         } else if (column === "Number_of_Coffee_Plots__c") {
-          formattedRow[column] =
-            value === "null" || value === "0" ? null : value;
+          formattedRow[column] = value === "null" ? null : value;
         } else {
           formattedRow[column] = value != "null" ? value : "";
         }
@@ -1506,7 +1515,7 @@ async function updateHouseholdsInSalesforce(
       .map((record) => record.Household__c)
       .filter((record) => record !== "");
 
-    const householdBatchSize = 500;
+    const householdBatchSize = 700;
     const batchedHouseholdNumbers = chunkArray(
       existingHouseholdNumbers,
       householdBatchSize
@@ -1514,7 +1523,7 @@ async function updateHouseholdsInSalesforce(
 
     const householdQueries = batchedHouseholdNumbers.map((batch) => {
       return sf_conn.query(
-        `SELECT Id, Farm_Size__c, Household_Number__c, Name, Number_of_Members__c, training_group__c 
+        `SELECT Id, Farm_Size__c, Number_of_Coffee_Plots__c, Household_Number__c, Name, Number_of_Members__c, training_group__c 
         FROM Household__c WHERE Id IN ('${batch.join("','")}')`
       );
     });
@@ -1823,16 +1832,18 @@ async function executeHHResult(sf_conn, filteredHHDataToInsert) {
 }
 
 function didHouseholdValuesChange(sfHousehold, itemToInsert) {
-  let farmSize = null;
-  if (itemToInsert.Farm_Size__c !== null) {
-    if (parseInt(itemToInsert.Farm_Size__c) === 0) {
-      farmSize = null;
-    } else {
-      farmSize = parseInt(itemToInsert.Farm_Size__c);
-    }
+  let farmSize = itemToInsert.Farm_Size__c;
+  let numberOfPlots = itemToInsert.Number_of_Coffee_Plots__c;
+  if (farmSize !== null) {
+    farmSize = parseInt(itemToInsert.Farm_Size__c);
+  }
+
+  if (numberOfPlots !== null) {
+    numberOfPlots = parseInt(itemToInsert.Number_of_Coffee_Plots__c);
   }
 
   return (
+    sfHousehold.Number_of_Coffee_Plots__c === numberOfPlots &&
     sfHousehold.Farm_Size__c === farmSize &&
     sfHousehold.Name === itemToInsert.Name &&
     sfHousehold.Number_of_Members__c === itemToInsert.Number_of_Members__c &&
@@ -1874,14 +1885,10 @@ function didParticipantValuesChange(sfParticipant, itemToInsert) {
   const sfOtherIdIsNull = normalize(sfParticipant.Other_ID_Number__c);
   const itemOtherIdIsEmpty = normalize(itemToInsert.Other_ID_Number__c);
 
-  let numberOfTrees = null;
+  let numberOfTrees = itemToInsert.Number_of_Coffee_Plots__c;
 
-  if (itemToInsert.Number_of_Coffee_Plots__c !== null) {
-    if (parseInt(itemToInsert.Number_of_Coffee_Plots__c) === 0) {
-      numberOfTrees = null;
-    } else {
-      numberOfTrees = parseInt(itemToInsert.Number_of_Coffee_Plots__c);
-    }
+  if (numberOfTrees !== null) {
+    numberOfTrees = parseInt(itemToInsert.Number_of_Coffee_Plots__c);
   }
 
   return (
@@ -1894,7 +1901,7 @@ function didParticipantValuesChange(sfParticipant, itemToInsert) {
     sfParticipant.Household__c === itemToInsert.Household__c &&
     sfParticipant.Status__c === itemToInsert.Status__c &&
     sfParticipant.Gender__c === itemToInsert.Gender__c &&
-    sfParticipant.Number_of_Coffee_Plots__c === numberOfTrees &&
+    //sfParticipant.Number_of_Coffee_Plots__c === numberOfTrees &&
     middleNameComparison && // Include the modified comparison for Middle_Name__c
     lastNameComparison && // Include the modified comparison for Last_Name__c
     sfOtherIdIsNull === itemOtherIdIsEmpty
