@@ -1,4 +1,5 @@
 import Projects from "../models/projects.models.mjs";
+import { FarmVisitService } from "../services/farmVisit.service.mjs";
 import fetchImage from "../utils/commCareApi.mjs";
 import ExcelJS from "exceljs";
 import PQueue from "p-queue";
@@ -691,6 +692,18 @@ const FarmVisitsResolvers = {
           status: err.status,
         };
       }
+    },
+
+    getSampledVisitsStats: async (_, { projectId }) => {
+      return await FarmVisitService.getSampledVisitsStats(projectId);
+    },
+
+    getBestPracticeReviewStats: async (_, { projectId, practiceName }) => {
+      return await FarmVisitService.getBestPracticeReviewStats(projectId, practiceName);
+    },
+
+    getPaginatedReviews: async (_, { projectId, practiceName, page, pageSize }) => {
+      return await FarmVisitService.getPaginatedReviews(projectId, practiceName, page, pageSize);
     },
 
     // getFVQAsByProjectForReview: async (_, { project_id }, { sf_conn }) => {

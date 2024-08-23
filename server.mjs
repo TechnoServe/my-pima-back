@@ -43,7 +43,7 @@ import TrainingModulesTypeDefs from "./src/typeDefs/training_modules.typeDefs.mj
 import TrainingModulesResolvers from "./src/resolvers/training_modules.resolvers.mjs";
 import PerformanceResolvers from "./src/resolvers/performance.resolvers.mjs";
 import PerformanceTypeDefs from "./src/typeDefs/performance.typeDefs.mjs";
-import { sampleFarmVisits } from "./src/services/farmVisit.service.mjs";
+import { FarmVisitService } from "./src/services/farmVisit.service.mjs";
 
 const app = express();
 
@@ -117,7 +117,7 @@ conn.login(
 );
 
 app.get("/api", async(req, res) => {
-  await sampleFarmVisits(conn);
+  await FarmVisitService.sampleFarmVisits(conn);
   res.send("Hello, My PIMA API Service!");
 });
 

@@ -12,10 +12,6 @@ const FarmVisit = sequelize.define("tbl_farm_visits", {
     type: DataTypes.STRING,
     allowNull: false,
   },
-  sf_project_id: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
   farmer_name: {
     type: DataTypes.STRING,
     allowNull: false,

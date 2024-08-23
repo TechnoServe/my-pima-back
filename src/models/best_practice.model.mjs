@@ -59,10 +59,12 @@ const BestPractice = sequelize.define("tbl_best_practices", {
 FarmVisit.hasMany(BestPractice, {
   foreignKey: "visit_id",
   onDelete: "CASCADE",
+  as: "BestPractices",
 });
 
 BestPractice.belongsTo(FarmVisit, {
   foreignKey: "visit_id",
+  as: "FarmVisit",
 });
 
 export default BestPractice;
