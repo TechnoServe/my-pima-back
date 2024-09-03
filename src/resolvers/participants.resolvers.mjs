@@ -56,8 +56,6 @@ const ParticipantsResolvers = {
           sf_conn.query(`SELECT Id, Name FROM Contact`),
         ]);
 
-        console.log("example participant", participants.slice(0, 5));
-
         return {
           message: "Participants fetched successfully",
           status: 200,
@@ -114,7 +112,10 @@ const ParticipantsResolvers = {
               coop_membership_number: participant.Other_ID_Number__c,
               phone_number: participant.Phone_Number__c,
               number_of_coffee_plots: participant.Household__c
-                ? participant.Household__r.Number_of_Coffee_Plots__c === ""
+                ? participant.Household__r.Number_of_Coffee_Plots__c ===
+                    "null" ||
+                  participant.Household__r.Number_of_Coffee_Plots__c === "" ||
+                  participant.Household__r.Number_of_Coffee_Plots__c === null
                   ? participant.Number_of_Coffee_Plots__c
                   : participant.Household__r.Number_of_Coffee_Plots__c
                 : "ERROR HERE! Please report to the PIMA team",
