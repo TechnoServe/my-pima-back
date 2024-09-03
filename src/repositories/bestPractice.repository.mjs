@@ -6,6 +6,18 @@ export const BestPracticeRepository = {
     return await BestPractice.create(data);
   },
 
+  async findById(practiceId) {
+    return await BestPractice.findByPk(practiceId);
+  },
+
+  async checkAllReviewed(visitId) {
+    const practices = await BestPractice.findAll({
+      where: { visit_id: visitId },
+    });
+
+    return practices.every(practice => practice.correct_answer !== null);
+  },
+
   async findByVisit(visitId) {
     return await BestPractice.findAll({
       where: { visit_id: visitId },

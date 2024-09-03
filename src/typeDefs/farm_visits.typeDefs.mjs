@@ -85,6 +85,21 @@ const FarmVisitsTypeDefs = gql`
     answer: String
   }
 
+  type Mutation {
+    submitBatch(input: [BatchInput!]!): BatchResponse!
+  }
+
+  input BatchInput {
+    practice_id: ID!
+    correct_answer: String!
+    comment: String
+    user_id: ID!
+  }
+
+  type BatchResponse {
+    success: Boolean!
+    message: String
+  }
   type getFVQAsByHouseholdResponse {
     FV_SF_ID: String!
     gender: String!

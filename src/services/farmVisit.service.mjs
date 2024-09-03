@@ -25,7 +25,62 @@ const bpFieldMapping = [
       },
     ],
   },
-  // Add more mappings as needed
+  {
+    practiceName: "Record Book",
+    fields: [
+      {
+        field: "are_there_records_on_the_record_book__c",
+        fieldLabel: "Are there records on the record book?",
+        imageField: "take_a_photo_of_the_record_book__c",
+        hasResults: false,
+      },
+    ],
+  },
+  {
+    practiceName: "Shade Management",
+    fields: [
+      {
+        field: "level_of_shade_present_on_the_farm__c",
+        fieldLabel: "What is the level of shade present on the farm?",
+        imageField: "photo_of_level_of_shade_on_the_plot__c",
+        hasResults: false,
+      },
+    ],
+  },
+  {
+    practiceName: "Weeding",
+    fields: [
+      {
+        field: "how_many_weeds_under_canopy_and_how_big__c",
+        fieldLabel: "How many weeds are under the canopy and how big are they?",
+        imageField: "photo_of_weeds_under_the_canopy__c",
+        hasResults: false,
+      },
+    ],
+  },
+  {
+    practiceName: "Stumping",
+    fields: [
+      {
+        field: "how_many_weeds_under_canopy_and_how_big__c",
+        fieldLabel: "Has the farmer stumped any coffee trees in the field visited since training started?",
+        imageField: "photos_of_stumped_coffee_trees__c",
+        hasResults: false,
+      },
+    ],
+  },
+  {
+    practiceName: "Main Stems",
+    fields: [
+      {
+        field: "number_of_main_stems_on_majority_trees__c",
+        fieldLabel: "How many main stems are on the majority of the trees?",
+        imageField: "photo_of_trees_and_average_main_stems__c",
+        hasResults: false,
+      },
+    ],
+  },
+  
 ];
 export const FarmVisitService = {
   // Main cron job function
@@ -92,6 +147,7 @@ export const FarmVisitService = {
       logger.error(`Error during farm visit sampling: ${error.message}`);
     }
   },
+
   async getSampledVisitsStats(projectId) {
     const startOfLastWeek = moment()
       .subtract(1, "weeks")
@@ -176,18 +232,52 @@ export const FarmVisitService = {
       },
       {
         practice_name: practiceName,
-        correct_answer: null,
+        correct_answer: { [Op.is]: null }
       },
       pageSize,
       page
     );
 
-    paginatedReviews.forEach((visit) => {
-        console.log(visit.BestPractices);
-    });
-      
+    return paginatedReviews.filter(review => review.BestPractices.length > 0);;
+  },
 
-    return paginatedReviews;
+  async submitBatch(input) {
+    try {
+      for (const item of input) {
+        const { practice_id, correct_answer, comment, user_id } = item;
+
+        // Update the BestPractice record
+        await BestPracticeRepository.update(practice_id, {
+          correct_answer,
+          comments: comment,
+        });
+
+        // Check if all BestPractices under the same FarmVisit are reviewed
+        const bestPractice = await BestPracticeRepository.findById(practice_id);
+        const allReviewed = await BestPracticeRepository.checkAllReviewed(
+          bestPractice.visit_id
+        );
+
+        if (allReviewed) {
+          // Update FarmVisit to 'Reviewed'
+          await FarmVisitRepository.update(bestPractice.visit_id, {
+            overall_status: "Reviewed",
+            last_reviewed_by: user_id,
+          });
+        }
+      }
+
+      return {
+        success: true,
+        message: "Batch submitted successfully!",
+      };
+    } catch (error) {
+      console.error(error);
+      return {
+        success: false,
+        message: "Failed to submit batch.",
+      };
+    }
   },
 };
 
@@ -274,17 +364,41 @@ const sampleVisitsForTrainer = async (project, farmVisits) => {
 const getProjectsToSample = async () => {
   // Implement the logic to get projects from Salesforce or another source
   return [
+    // {
+    //   sf_project_id: "a0E7S0000009aIAUAY",
+    //   sampleAll: true,
+    //   sampleSize: null,
+    //   project_country: "Zimbambwe",
+    // },
+    // {
+    //   sf_project_id: "a0E1o00000krP5jEAE",
+    //   sampleAll: true,
+    //   sampleSize: null,
+    //   project_country: "Zimbambwe",
+    // },
+    // {
+    //   sf_project_id: "a0E1o00000nM1hfEAC",
+    //   sampleAll: true,
+    //   sampleSize: null,
+    //   project_country: "Zimbambwe",
+    // },
+    // {
+    //   sf_project_id: "a0E9J000000NTjpUAG",
+    //   sampleAll: false,
+    //   sampleSize: 1,
+    //   project_country: "Kenya",
+    // },
     {
-      sf_project_id: "a0E1o00000krP5jEAE",
-      sampleAll: true,
-      sampleSize: null,
-      project_country: "Burundi",
-    },
-    {
-      sf_project_id: "a0E9J000000NTjpUAG",
+      sf_project_id: "a0EOj000000VN5BMAW",
       sampleAll: false,
       sampleSize: 1,
       project_country: "Kenya",
     },
+    // {
+    //   sf_project_id: "a0EOj000002RJS1MAO",
+    //   sampleAll: false,
+    //   sampleSize: 1,
+    //   project_country: "Kenya",
+    // },
   ];
 };

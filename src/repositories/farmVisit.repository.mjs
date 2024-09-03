@@ -11,7 +11,7 @@ export const FarmVisitRepository = {
         {
           model: BestPractice,
           as: "BestPractices",
-          //where: where2, // This replaces the where conditions for BestPractice
+          where: where2, // This replaces the where conditions for BestPractice
           required: false,
           attributes: [
             "practice_id",
@@ -23,8 +23,8 @@ export const FarmVisitRepository = {
           ],
         },
       ],
-      // limit: pageSize,
-      // offset: page * pageSize,
+      limit: pageSize,
+      offset: page * pageSize,
       order: [["date_visited", "ASC"]],
       logging: console.log,
     });

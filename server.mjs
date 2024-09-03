@@ -44,6 +44,7 @@ import TrainingModulesResolvers from "./src/resolvers/training_modules.resolvers
 import PerformanceResolvers from "./src/resolvers/performance.resolvers.mjs";
 import PerformanceTypeDefs from "./src/typeDefs/performance.typeDefs.mjs";
 import { FarmVisitService } from "./src/services/farmVisit.service.mjs";
+import axios from "axios";
 
 const app = express();
 
@@ -119,6 +120,28 @@ conn.login(
 app.get("/api", async(req, res) => {
   await FarmVisitService.sampleFarmVisits(conn);
   res.send("Hello, My PIMA API Service!");
+});
+
+app.get('/image/:formId/:attachmentId', async (req, res) => {
+  const { formId, attachmentId } = req.params;
+  const commcareApiUrl = `https://www.commcarehq.org/a/tns-proof-of-concept/api/form/attachment/${formId}/${attachmentId}`;
+
+  console.log(`requesting image on this url ${commcareApiUrl}`)
+  try {
+    const response = await axios.get(commcareApiUrl, {
+      headers: {
+        Authorization: `ApiKey ymugenga@tns.org:46fa5358cd802aabcc5c3b14a194464d40c564e6`,
+      },
+      responseType: 'arraybuffer', // Handle binary data (e.g., images)
+    });
+
+    // Set the appropriate headers and send the image back
+    res.set('Content-Type', 'image/jpeg');
+    res.send(response.data);
+  } catch (error) {
+    console.error('Error fetching the image:', error);
+    res.status(500).send('Error fetching the image');
+  }
 });
 
 const server = new ApolloServer({

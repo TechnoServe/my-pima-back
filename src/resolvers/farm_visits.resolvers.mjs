@@ -699,11 +699,22 @@ const FarmVisitsResolvers = {
     },
 
     getBestPracticeReviewStats: async (_, { projectId, practiceName }) => {
-      return await FarmVisitService.getBestPracticeReviewStats(projectId, practiceName);
+      return await FarmVisitService.getBestPracticeReviewStats(
+        projectId,
+        practiceName
+      );
     },
 
-    getPaginatedReviews: async (_, { projectId, practiceName, page, pageSize }) => {
-      return await FarmVisitService.getPaginatedReviews(projectId, practiceName, page, pageSize);
+    getPaginatedReviews: async (
+      _,
+      { projectId, practiceName, page, pageSize }
+    ) => {
+      return await FarmVisitService.getPaginatedReviews(
+        projectId,
+        practiceName,
+        page,
+        pageSize
+      );
     },
 
     // getFVQAsByProjectForReview: async (_, { project_id }, { sf_conn }) => {
@@ -1067,6 +1078,23 @@ const FarmVisitsResolvers = {
       }
     },
   },
+  Mutation: {
+    async submitBatch(_, { input }) {
+      try {
+        const result = await FarmVisitService.submitBatch(input);
+        return {
+          success: result.success,
+          message: result.message,
+        };
+      } catch (error) {
+        console.error(error);
+        return {
+          success: false,
+          message: "Failed to submit batch.",
+        };
+      }
+    },
+  },
 };
 
 const getFVMethods = async (fvMethod, bpId, sf_conn) => {
@@ -1211,19 +1239,37 @@ const createWorkbook = (resolvedFarmVisits, fields, practice_name) => {
       if (imageData && imageData.startsWith("data:image")) {
         try {
           const imageId = workbook.addImage({
-            base64: imageData.replace(/^data:image\/(png|jpg|jpeg);base64,/, ""),
+            base64: imageData.replace(
+              /^data:image\/(png|jpg|jpeg);base64,/,
+              ""
+            ),
             extension: "png", // Use correct extension based on image type
           });
 
           worksheet.addImage(imageId, {
-            tl: { col: columns.findIndex(col => col.key === `${practice_name}: ${field.picture}`), row: row.number - 1 },
+            tl: {
+              col: columns.findIndex(
+                (col) => col.key === `${practice_name}: ${field.picture}`
+              ),
+              row: row.number - 1,
+            },
             ext: { width: 100, height: 100 }, // Adjust width and height as necessary
           });
 
           // Remove the plain text base64 from the cell to avoid confusion
-          worksheet.getCell(`${row.getCell(columns.findIndex(col => col.key === `${practice_name}: ${field.picture}`) + 1).address}`).value = null;
+          worksheet.getCell(
+            `${
+              row.getCell(
+                columns.findIndex(
+                  (col) => col.key === `${practice_name}: ${field.picture}`
+                ) + 1
+              ).address
+            }`
+          ).value = null;
         } catch (error) {
-          console.error(`Error adding image for ${visit["Farmer PIMA ID"]}: ${error.message}`);
+          console.error(
+            `Error adding image for ${visit["Farmer PIMA ID"]}: ${error.message}`
+          );
         }
       }
     });
@@ -1231,6 +1277,5 @@ const createWorkbook = (resolvedFarmVisits, fields, practice_name) => {
 
   return workbook;
 };
-
 
 export default FarmVisitsResolvers;
