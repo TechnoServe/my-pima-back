@@ -1,14 +1,17 @@
 import {
   fetchFTsFromSalesforceByPId,
   fetchFarmVisitsFromSalesforce,
+  fetchTrainingGroupsByProjectId,
+  fetchFarmVisitsByTrainingGroups,
 } from "../utils/salesforce.utils.mjs";
 import sequelize from "../config/db.mjs";
 import logger from "../config/logger.mjs";
 import { FarmVisitRepository } from "../repositories/farmVisit.repository.mjs";
 import { BestPracticeRepository } from "../repositories/bestPractice.repository.mjs";
 import moment from "moment";
-import { Op } from "sequelize"; // Ensure this is imported
+import { Op } from "sequelize";
 import BestPractice from "../models/best_practice.model.mjs";
+import FarmVisit from "../models/farm_visit.model.mjs";
 
 const BATCH_SIZE = 100;
 
@@ -63,7 +66,8 @@ const bpFieldMapping = [
     fields: [
       {
         field: "how_many_weeds_under_canopy_and_how_big__c",
-        fieldLabel: "Has the farmer stumped any coffee trees in the field visited since training started?",
+        fieldLabel:
+          "Has the farmer stumped any coffee trees in the field visited since training started?",
         imageField: "photos_of_stumped_coffee_trees__c",
         hasResults: false,
       },
@@ -80,10 +84,18 @@ const bpFieldMapping = [
       },
     ],
   },
-  
 ];
 export const FarmVisitService = {
-  // Main cron job function
+  // Method to fetch farm visit by Project from SF
+  async getFarmVisitsByProject(sf_conn, project_id) {
+    const tg_ids = await fetchTrainingGroupsByProjectId(sf_conn, project_id);
+    const farmVisits = await fetchFarmVisitsByTrainingGroups(sf_conn, tg_ids);
+    const mappedFarmVisits = processFVResponse(farmVisits);
+
+    return mappedFarmVisits;
+  },
+
+  // Method to handle the farm visit sampling process
   async sampleFarmVisits(sf_conn) {
     try {
       const projects = await getProjectsToSample();
@@ -94,45 +106,72 @@ export const FarmVisitService = {
       await Promise.all(
         projects.map(async (project) => {
           try {
+            const lastMonday = moment()
+              .subtract(1, "weeks")
+              .startOf("isoWeek")
+              .format("YYYY-MM-DD");
+            const lastSunday = moment()
+              .subtract(1, "weeks")
+              .endOf("isoWeek")
+              .format("YYYY-MM-DD");
             const farmerTrainers = await fetchFTsFromSalesforceByPId(
               sf_conn,
               project.sf_project_id
             );
 
+            // Check if project has been sampled already last week
             logger.info(
               `Processing project ${project.sf_project_id} with ${farmerTrainers.length} Farmer Trainers.`
             );
 
             for (const trainer of farmerTrainers) {
-              const farmVisits = await fetchFarmVisitsFromSalesforce(
-                sf_conn,
-                trainer.Staff__c
-              );
-
-              const sampledVisits = await sampleVisitsForTrainer(
-                project,
-                farmVisits
-              );
-
-              const visitsToSave = sampledVisits.map((visit) => {
-                const bestPractices = extractBestPracticesFromVisit(
-                  bpFieldMapping,
-                  visit
-                );
-                return {
-                  sf_visit_id: visit.Id,
-                  sf_project_id: project.sf_project_id,
-                  farmer_name: visit.Farm_Visit__r.Farm_Visited__r.Name,
-                  farmer_pima_id: visit.Farm_Visit__r.Farm_Visited__c,
-                  farmer_tns_id: visit.Farm_Visit__r.Farm_Visited__r.TNS_Id__c,
-                  date_visited: visit.Farm_Visit__r.Date_Visited__c,
-                  farmer_trainer: visit.Farm_Visit__r.Farmer_Trainer__r.Name,
-                  date_sampled: new Date(),
-                  bestPractices: bestPractices,
-                };
+              const recordsFound = await FarmVisitRepository.count({
+                sf_project_id: project.sf_project_id,
+                farmer_trainer: trainer.Staff__r.Name,
+                date_visited: {
+                  [Op.between]: [lastMonday, lastSunday],
+                },
               });
 
-              await saveFarmVisitSamplesInBatches(visitsToSave);
+              // If FT already sampled. Skip them.
+              if (recordsFound > 0) {
+                logger.info(
+                  `Skipping processing for FT: ${trainer.Staff__r.Name}.`
+                );
+              } else {
+                const farmVisits = await fetchFarmVisitsFromSalesforce(
+                  sf_conn,
+                  trainer.Staff__c,
+                  lastMonday,
+                  lastSunday
+                );
+
+                const sampledVisits = await sampleVisitsForTrainer(
+                  project,
+                  farmVisits
+                );
+
+                const visitsToSave = sampledVisits.map((visit) => {
+                  const bestPractices = extractBestPracticesFromVisit(
+                    bpFieldMapping,
+                    visit
+                  );
+                  return {
+                    sf_visit_id: visit.Id,
+                    sf_project_id: project.sf_project_id,
+                    farmer_name: visit.Farm_Visit__r.Farm_Visited__r.Name,
+                    farmer_pima_id: visit.Farm_Visit__r.Farm_Visited__c,
+                    farmer_tns_id:
+                      visit.Farm_Visit__r.Farm_Visited__r.TNS_Id__c,
+                    date_visited: visit.Farm_Visit__r.Date_Visited__c,
+                    farmer_trainer: visit.Farm_Visit__r.Farmer_Trainer__r.Name,
+                    date_sampled: new Date(),
+                    bestPractices: bestPractices,
+                  };
+                });
+
+                await saveFarmVisitSamplesInBatches(visitsToSave);
+              }
             }
           } catch (error) {
             logger.error(
@@ -232,13 +271,128 @@ export const FarmVisitService = {
       },
       {
         practice_name: practiceName,
-        correct_answer: { [Op.is]: null }
+        correct_answer: { [Op.is]: null },
       },
       pageSize,
       page
     );
 
-    return paginatedReviews.filter(review => review.BestPractices.length > 0);;
+    return paginatedReviews.filter((review) => review.BestPractices.length > 0);
+  },
+
+  // Get farm visit stats for each farmer trainer
+  async getFarmVisitStatisticsByTrainer(projectId) {
+    // Step 1: Fetch all distinct practice names from the database
+    const distinctBestPractices = await BestPracticeRepository.findAll({
+      attributes: ["practice_name"],
+      group: ["practice_name"], // Group by practice_name to avoid duplicates
+    });
+
+    // Extract best practice names from the result
+    const bestPracticeTypes = distinctBestPractices.map(
+      (bp) => bp.practice_name
+    );
+
+    // Fetch farm visits grouped by farmer trainer
+    const farmVisits = await FarmVisitRepository.findAll({
+      where: { sf_project_id: projectId },
+      attributes: [
+        "farmer_trainer",
+        [sequelize.fn("ARRAY_AGG", sequelize.col("visit_id")), "visit_ids"], // Correct aggregation and alias
+      ],
+      group: ["farmer_trainer"], // Grouping by farmer_trainer
+      raw: true, // Ensures the results are returned as raw data (not as Sequelize model instances)
+    });
+
+    console.log(farmVisits[0].visit_ids);
+
+    // Process each farmer trainer's visits
+    const trainerStats = farmVisits.map(async (visitGroup) => {
+      const { farmer_trainer, visit_ids } = visitGroup;
+
+      // console.log(farmer_trainer, visit_ids);
+
+      // Ensure `visit_ids` is valid and not empty
+      if (!visit_ids || visit_ids.length === 0) {
+        return {
+          farmer_trainer,
+          totalSampled: 0,
+          bestPracticeStats: {},
+        };
+      }
+
+      // Get the total number of sampled farm visits for this trainer
+      const totalSampled = await FarmVisitRepository.count({
+        sf_project_id: projectId,
+        farmer_trainer: farmer_trainer,
+      });
+
+      // Object to store the percentage results for each best practice
+      const bestPracticeStats = {};
+
+      for (const practiceName of bestPracticeTypes) {
+        // Get all best practices for this farm trainer with the given practice type
+        const bestPractices = await BestPracticeRepository.findAll({
+          where: {
+            visit_id: {
+              [Op.in]: visit_ids, // Ensure visit_ids is an array
+            },
+            practice_name: practiceName,
+          },
+        });
+
+        // Ensure `bestPractices` is valid and an array
+        if (!bestPractices || bestPractices.length === 0) {
+          bestPracticeStats[practiceName] = {
+            yesPercentage: "0.00",
+            noPercentage: "0.00",
+            unclearPercentage: "0.00",
+            notReviewedPercentage: "100.00",
+          };
+          continue;
+        }
+
+        // Count the number of Yes, No, Unclear, and Not Reviewed responses for this best practice type
+        const yesCount = bestPractices.filter(
+          (bp) => bp.correct_answer === "yes"
+        ).length;
+        const noCount = bestPractices.filter(
+          (bp) => bp.correct_answer === "no"
+        ).length;
+        const unclearCount = bestPractices.filter(
+          (bp) => bp.correct_answer === "unclear"
+        ).length;
+        const reviewedCount = yesCount + noCount + unclearCount;
+        const notReviewedCount = totalSampled - reviewedCount;
+
+        // Calculate percentages based on total sampled farm visits
+        const yesPercentage = ((yesCount / totalSampled) * 100).toFixed(2);
+        const noPercentage = ((noCount / totalSampled) * 100).toFixed(2);
+        const unclearPercentage = ((unclearCount / totalSampled) * 100).toFixed(
+          2
+        );
+        const notReviewedPercentage = (
+          (notReviewedCount / totalSampled) *
+          100
+        ).toFixed(2);
+
+        // Store the percentages for the current best practice type
+        bestPracticeStats[practiceName] = {
+          yesPercentage,
+          noPercentage,
+          unclearPercentage,
+          notReviewedPercentage,
+        };
+      }
+
+      return {
+        farmer_trainer,
+        totalSampled,
+        bestPracticeStats, // Contains percentages for each best practice type
+      };
+    });
+
+    return Promise.all(trainerStats);
   },
 
   async submitBatch(input) {
@@ -344,7 +498,9 @@ const extractBestPracticesFromVisit = (bpFieldMapping, visit) => {
         image_url: visit[field.imageField],
       };
 
-      bestPractices.push(record);
+      if (record.image_url !== null) {
+        bestPractices.push(record);
+      }
     }
   }
 
@@ -382,23 +538,44 @@ const getProjectsToSample = async () => {
     //   sampleSize: null,
     //   project_country: "Zimbambwe",
     // },
-    // {
-    //   sf_project_id: "a0E9J000000NTjpUAG",
-    //   sampleAll: false,
-    //   sampleSize: 1,
-    //   project_country: "Kenya",
-    // },
+    {
+      sf_project_id: "a0E9J000000NTjpUAG",
+      sampleAll: false,
+      sampleSize: 1,
+      project_country: "Kenya",
+    },
     {
       sf_project_id: "a0EOj000000VN5BMAW",
       sampleAll: false,
       sampleSize: 1,
       project_country: "Kenya",
     },
-    // {
-    //   sf_project_id: "a0EOj000002RJS1MAO",
-    //   sampleAll: false,
-    //   sampleSize: 1,
-    //   project_country: "Kenya",
-    // },
+    {
+      sf_project_id: "a0EOj000002RJS1MAO",
+      sampleAll: false,
+      sampleSize: 1,
+      project_country: "Kenya",
+    },
   ];
 };
+
+const processFVResponse = (farmVisits) =>
+  farmVisits.map((fv) => ({
+    fv_id: fv.Id,
+    fv_name: fv.Name,
+    training_group: fv.Training_Group__r.Name,
+    training_session: fv.Training_Session__r
+      ? fv.Training_Session__r.Name
+      : "N/A",
+    tg_tns_id: fv.Training_Group__r.TNS_Id__c || "N/A",
+    farmer_tns_id: fv.Farm_Visited__r.TNS_Id__c || "N/A",
+    household_tns_id: fv.Farm_Visited__r.Household__r.Household_ID__c || "N/A",
+    farm_visited: fv.Farm_Visited__r
+      ? fv.Farm_Visited__r.Name + " " + fv.Farm_Visited__r.Last_Name__c
+      : "N/A",
+    farmer_trainer: fv.Farmer_Trainer__r.Name || "N/A",
+    has_training: fv.Visit_Has_Training__c || "No",
+    date_visited: fv.Date_Visited__c,
+    pima_household_id: fv.Farm_Visited__c,
+    pima_farmer_id: fv.Farm_Visited__r.Household__c,
+  }));

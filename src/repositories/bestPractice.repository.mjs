@@ -6,6 +6,10 @@ export const BestPracticeRepository = {
     return await BestPractice.create(data);
   },
 
+  async findAll(condition){
+    return await BestPractice.findAll(condition);
+  },
+
   async findById(practiceId) {
     return await BestPractice.findByPk(practiceId);
   },

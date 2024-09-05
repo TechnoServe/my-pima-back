@@ -36,6 +36,10 @@ export const FarmVisitRepository = {
     });
   },
 
+  async findAll(conditions){
+    return await FarmVisit.findAll(conditions);
+  },
+
   async findBySfId(sfVisitId) {
     return await FarmVisit.findOne({
       where: { sf_visit_id: sfVisitId },

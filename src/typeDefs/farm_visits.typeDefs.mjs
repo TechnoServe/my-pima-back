@@ -6,7 +6,9 @@ const FarmVisitsTypeDefs = gql`
     fv_name: String!
     training_group: String!
     training_session: String
-    tns_id: String
+    tg_tns_id: String
+    farmer_tns_id: String
+    household_tns_id: String
     farm_visited: String
     household_id: String!
     farmer_trainer: String!
@@ -51,6 +53,7 @@ const FarmVisitsTypeDefs = gql`
       page: Int!
       pageSize: Int!
     ): [FarmVisit]
+    generateFarmVisitReport(projectId: String!): FileExport
   }
 
   type VisitStats {
@@ -150,7 +153,7 @@ const FarmVisitsTypeDefs = gql`
   type FileExport {
     message: String!
     status: Int!
-    file: String!
+    file: String
   }
 
   type AllFarmVisitsResponse {

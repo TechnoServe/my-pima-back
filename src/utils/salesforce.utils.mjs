@@ -1,16 +1,6 @@
-import moment from "moment";
 import logger from "../config/logger.mjs";
 
-export const fetchFarmVisitsFromSalesforce = async (sf_conn, trainerId) => {
-  const lastMonday = moment()
-    .subtract(1, "weeks")
-    .startOf("isoWeek")
-    .format("YYYY-MM-DD");
-  const lastSunday = moment()
-    .subtract(1, "weeks")
-    .endOf("isoWeek")
-    .format("YYYY-MM-DD");
-
+export const fetchFarmVisitsFromSalesforce = async (sf_conn, trainerId, lastMonday, lastSunday) => {
   const soqlQuery = `
     SELECT Id, Name, Best_Practice_Adoption__c, Farm_Visit__c,
            Farm_Visit__r.Name, Farm_Visit__r.Training_Group__r.Name,
@@ -57,4 +47,41 @@ export const fetchFTsFromSalesforceByPId = async (sf_conn, projectId) => {
   } catch (error) {
     throw error;
   }
+};
+
+export const fetchTrainingGroupsByProjectId = async (sf_conn, project_id) => {
+  const groups = await sf_conn.query(
+    `SELECT Id FROM Training_Group__c WHERE Project__c = '${project_id}'`
+  );
+
+  if (groups.totalSize === 0) {
+    throw new Error("Training Groups not found");
+  }
+
+  return groups.records.map((group) => group.Id);
+};
+
+export const fetchFarmVisitsByTrainingGroups = async (sf_conn, tg_ids) => {
+  let farmVisits = [];
+  let result = await sf_conn.query(
+    `SELECT Id, Training_Group__r.Name, Training_Group__r.TNS_Id__c,
+      Farm_Visited__c, Farm_Visited__r.Name, Farm_Visited__r.Last_Name__C, 
+      Farm_Visited__r.TNS_Id__c, Farm_Visited__r.Household__c, 
+      Farm_Visited__r.Household__r.Household_ID__c, Farmer_Trainer__r.Name, Date_Visited__c  
+    FROM Farm_Visit__c 
+    WHERE Training_Group__c IN (${tg_ids.map((id) => `'${id}'`).join(", ")})`
+  );
+
+  farmVisits = farmVisits.concat(result.records);
+
+  while (!result.done) {
+    result = await sf_conn.queryMore(result.nextRecordsUrl);
+    farmVisits = farmVisits.concat(result.records);
+  }
+
+  if (farmVisits.length === 0) {
+    throw new Error("Farm Visits not found");
+  }
+
+  return farmVisits;
 };

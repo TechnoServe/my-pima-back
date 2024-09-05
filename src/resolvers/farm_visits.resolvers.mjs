@@ -1,273 +1,72 @@
-import Projects from "../models/projects.models.mjs";
 import { FarmVisitService } from "../services/farmVisit.service.mjs";
+import { ReportGeneratorService } from "../services/excel.service.mjs";
 import fetchImage from "../utils/commCareApi.mjs";
-import ExcelJS from "exceljs";
 import PQueue from "p-queue";
 
 const FarmVisitsResolvers = {
   Query: {
     getFarmVisitsByProject: async (_, { project_id }, { sf_conn }) => {
       try {
-        // check if project exists by project_id
-        const project = await Projects.findOne({
-          where: { sf_project_id: project_id },
-        });
-
-        if (!project) {
-          return {
-            message: "Project not found",
-            status: 404,
-          };
-        }
-
-        const groups = await sf_conn.query(
-          "SELECT Id FROM Training_Group__c WHERE Project__c = '" +
-            project_id +
-            "'"
-        );
-
-        if (groups.totalSize === 0) {
-          return {
-            message: "Training Groups not found",
-            status: 404,
-          };
-        }
-
-        const tg_ids = groups.records.map((group) => group.Id);
-
-        let farmVisits = [];
-
-        let result = await sf_conn.query(
-          "SELECT Id, Name, Training_Group__r.Name, Training_Group__r.TNS_Id__c, Training_Session__r.Name, Farm_Visited__r.Name, Household_PIMA_ID__c, Farmer_Trainer__r.Name, Visit_Has_Training__c, Date_Visited__c, Farm_Visited__c, Farm_Visited__r.Household__c FROM Farm_Visit__c WHERE Training_Group__c IN ('" +
-            tg_ids.join("','") +
-            "')"
-        );
-
-        farmVisits = farmVisits.concat(result.records);
-
-        // Check if there are more records to retrieve
-        while (result.done === false) {
-          // Use queryMore to retrieve additional records
-          result = await sf_conn.queryMore(result.nextRecordsUrl);
-          farmVisits = farmVisits.concat(result.records);
-        }
-
-        if (farmVisits.length === 0) {
-          return {
-            message: "Farm Visits not found",
-            status: 404,
-          };
-        }
+        const farmVisits = await FarmVisitService.getFarmVisitsByProject(sf_conn, project_id);
 
         return {
           message: "Farm Visits fetched successfully",
           status: 200,
-          farmVisits: farmVisits.map(async (fv) => {
-            return {
-              fv_id: fv.Id,
-              fv_name: fv.Name,
-              training_group: fv.Training_Group__r.Name,
-              training_session: fv.Training_Session__r
-                ? fv.Training_Session__r.Name
-                : "N/A",
-              tns_id: fv.Training_Group__r.TNS_Id__c || "N/A",
-              farm_visited: fv.Farm_Visited__r
-                ? fv.Farm_Visited__r.Name
-                : "N/A",
-              household_id: fv.Household_PIMA_ID__c || "N/A",
-              farmer_trainer: fv.Farmer_Trainer__r.Name || "N/A",
-              has_training: fv.Visit_Has_Training__c || "No",
-              date_visited: fv.Date_Visited__c,
-              pima_household_id: fv.Farm_Visited__c,
-              pima_farmer_id: fv.Farm_Visited__r.Household__c,
-            };
-          }),
+          farmVisits: farmVisits,
         };
       } catch (err) {
-        console.log(err);
-
+        console.error(err);
         return {
-          message: "Something went wrong",
-          status: err.status,
+          message: err.message || "Something went wrong",
+          status: err.status || 500,
         };
       }
     },
 
-    getFarmVisitsByGroup: async (_, { tg_id }, { sf_conn }) => {
+    generateFarmVisitReport: async (_, { projectId }) => {
       try {
-        // check if training group exists by tg_id
-        const training_group = await sf_conn.query(
-          `SELECT Id FROM Training_Group__c WHERE Id = '${tg_id}'`
-        );
+        // Step 1: Fetch the farm visit statistics
+        const trainerStats = await FarmVisitService.getFarmVisitStatisticsByTrainer(projectId);
 
-        if (training_group.totalSize === 0) {
-          return {
-            message: "Training Group not found",
-            status: 404,
-          };
-        }
+        // Step 2: Generate the Excel report as Base64
+        const base64Report = await ReportGeneratorService.generateFarmVisitExcelReport(trainerStats);
 
-        const farmVisits = await sf_conn.query(
-          "SELECT Id, Name, Training_Group__r.Name, Training_Group__r.TNS_Id__c, Training_Session__r.Name, Farm_Visited__r.Name, Household_PIMA_ID__c, Farmer_Trainer__r.Name, Visit_Has_Training__c, Date_Visited__c FROM Farm_Visit__c WHERE Training_Group__c = '" +
-            tg_id +
-            "'"
-        );
-
-        if (farmVisits.totalSize === 0) {
-          return {
-            message: "Farm Visit not found",
-            status: 404,
-          };
-        }
-
+        // Step 3: Return the Base64 report
         return {
-          message: "Farm Visits fetched successfully",
+          message: "Farm Visit report generated successfully",
           status: 200,
-          farmVisits: farmVisits.records.map(async (fv) => {
-            return {
-              fv_id: fv.Id,
-              fv_name: fv.Name,
-              training_group: fv.Training_Group__r.Name,
-              training_session: fv.Training_Session__r
-                ? fv.Training_Session__r.Name
-                : "N/A",
-              tns_id: fv.Training_Group__r.TNS_Id__c || "N/A",
-              farm_visited: fv.Farm_Visited__r
-                ? fv.Farm_Visited__r.Name
-                : "N/A",
-              household_id: fv.Household_PIMA_ID__c || "N/A",
-              farmer_trainer: fv.Farmer_Trainer__r.Name || "N/A",
-              has_training: fv.Visit_Has_Training__c || "No",
-              date_visited: fv.Date_Visited__c,
-            };
-          }),
+          file: `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64Report}`,
         };
-      } catch (error) {
-        console.log(error);
-
+      } catch (err) {
+        console.error("Error generating farm visit report:", err);
         return {
-          message: error.message,
-          status: error.status,
+          message: "Failed to generate farm visit report",
+          status: 500,
         };
       }
     },
 
-    getFarmVisitsBySession: async (_, { ts_id }, { sf_conn }) => {
-      try {
-        // check if training group exists by tg_id
-        const training_session = await sf_conn.query(
-          `SELECT Id FROM Training_Session__c WHERE Id = '${ts_id}'`
-        );
-
-        if (training_session.totalSize === 0) {
-          return {
-            message: "Training Session not found",
-            status: 404,
-          };
-        }
-
-        const farmVisits = await sf_conn.query(
-          "SELECT Id, Name, Training_Group__r.Name, Training_Group__r.TNS_Id__c, Training_Session__r.Name, Farm_Visited__r.Name, Household_PIMA_ID__c, Farmer_Trainer__r.Name, Visit_Has_Training__c, Date_Visited__c FROM Farm_Visit__c WHERE Training_Session__c = '" +
-            ts_id +
-            "'"
-        );
-
-        if (farmVisits.totalSize === 0) {
-          return {
-            message: "Farm Visit not found",
-            status: 404,
-          };
-        }
-
-        return {
-          message: "Farm Visits fetched successfully",
-          status: 200,
-          farmVisits: farmVisits.records.map(async (fv) => {
-            return {
-              fv_id: fv.Id,
-              fv_name: fv.Name,
-              training_group: fv.Training_Group__r.Name,
-              training_session: fv.Training_Session__r
-                ? fv.Training_Session__r.Name
-                : "N/A",
-              tns_id: fv.Training_Group__r.TNS_Id__c || "N/A",
-              farm_visited: fv.Farm_Visited__r
-                ? fv.Farm_Visited__r.Name
-                : "N/A",
-              household_id: fv.Household_PIMA_ID__c || "N/A",
-              farmer_trainer: fv.Farmer_Trainer__r.Name || "N/A",
-              has_training: fv.Visit_Has_Training__c || "No",
-              date_visited: fv.Date_Visited__c,
-            };
-          }),
-        };
-      } catch (error) {
-        console.log(error);
-
-        return {
-          message: error.message,
-          status: error.status,
-        };
-      }
+    getSampledVisitsStats: async (_, { projectId }) => {
+      return await FarmVisitService.getSampledVisitsStats(projectId);
     },
 
-    getFarmVisitsByParticipant: async (_, { part_id }, { sf_conn }) => {
-      try {
-        // check if training group exists by tg_id
-        const participant = await sf_conn.query(
-          `SELECT Id FROM Participant__c WHERE Id = '${part_id}'`
-        );
+    getBestPracticeReviewStats: async (_, { projectId, practiceName }) => {
+      return await FarmVisitService.getBestPracticeReviewStats(
+        projectId,
+        practiceName
+      );
+    },
 
-        if (participant.totalSize === 0) {
-          return {
-            message: "Participant not found",
-            status: 404,
-          };
-        }
-
-        const farmVisits = await sf_conn.query(
-          "SELECT Id, Name, Training_Group__r.Name, Training_Group__r.TNS_Id__c, Training_Session__r.Name, Farm_Visited__r.Name, Household_PIMA_ID__c, Farmer_Trainer__r.Name, Visit_Has_Training__c, Farm_Visited__c, Date_Visited__c FROM Farm_Visit__c WHERE Farm_Visited__c = '" +
-            part_id +
-            "'"
-        );
-
-        if (farmVisits.totalSize === 0) {
-          return {
-            message: "Farm Visit not found",
-            status: 404,
-          };
-        }
-
-        return {
-          message: "Farm Visits fetched successfully",
-          status: 200,
-          farmVisits: farmVisits.records.map(async (fv) => {
-            return {
-              fv_id: fv.Id,
-              fv_name: fv.Name,
-              training_group: fv.Training_Group__r.Name,
-              training_session: fv.Training_Session__r
-                ? fv.Training_Session__r.Name
-                : "N/A",
-              tns_id: fv.Training_Group__r.TNS_Id__c || "N/A",
-              farm_visited: fv.Farm_Visited__r
-                ? fv.Farm_Visited__r.Name
-                : "N/A",
-              household_id: fv.Household_PIMA_ID__c || "N/A",
-              farmer_trainer: fv.Farmer_Trainer__r.Name || "N/A",
-              has_training: fv.Visit_Has_Training__c || "No",
-              date_visited: fv.Date_Visited__c,
-            };
-          }),
-        };
-      } catch (error) {
-        console.log(error);
-
-        return {
-          message: error.message,
-          status: error.status,
-        };
-      }
+    getPaginatedReviews: async (
+      _,
+      { projectId, practiceName, page, pageSize }
+    ) => {
+      return await FarmVisitService.getPaginatedReviews(
+        projectId,
+        practiceName,
+        page,
+        pageSize
+      );
     },
 
     getFVQAsByHousehold: async (_, { project_id }, { sf_conn }) => {
@@ -694,389 +493,182 @@ const FarmVisitsResolvers = {
       }
     },
 
-    getSampledVisitsStats: async (_, { projectId }) => {
-      return await FarmVisitService.getSampledVisitsStats(projectId);
-    },
-
-    getBestPracticeReviewStats: async (_, { projectId, practiceName }) => {
-      return await FarmVisitService.getBestPracticeReviewStats(
-        projectId,
-        practiceName
-      );
-    },
-
-    getPaginatedReviews: async (
-      _,
-      { projectId, practiceName, page, pageSize }
-    ) => {
-      return await FarmVisitService.getPaginatedReviews(
-        projectId,
-        practiceName,
-        page,
-        pageSize
-      );
-    },
-
-    // getFVQAsByProjectForReview: async (_, { project_id }, { sf_conn }) => {
+    // getFarmVisitsByGroup: async (_, { tg_id }, { sf_conn }) => {
     //   try {
-    //     const groups = await sf_conn.query(
-    //       `SELECT Id FROM Training_Group__c WHERE Project__c = '${project_id}' LIMIT 1`
+    //     // check if training group exists by tg_id
+    //     const training_group = await sf_conn.query(
+    //       `SELECT Id FROM Training_Group__c WHERE Id = '${tg_id}'`
     //     );
 
-    //     if (groups.totalSize === 0) {
+    //     if (training_group.totalSize === 0) {
     //       return {
-    //         message: "Training Groups not found",
+    //         message: "Training Group not found",
     //         status: 404,
     //       };
     //     }
 
-    //     console.log(`found ${groups.totalSize} groups`);
-    //     console.log(groups.records);
-
-    //     const tg_ids = groups.records.map((group) => group.Id);
-
-    //     let farmVisits = [];
-
-    //     let now = new Date();
-    //     let dayOfWeek = now.getDay(); // 0 (Sunday) to 6 (Saturday)
-    //     let startOfLastWeek = new Date(
-    //       now.setDate(now.getDate() - dayOfWeek - 6)
+    //     const farmVisits = await sf_conn.query(
+    //       "SELECT Id, Name, Training_Group__r.Name, Training_Group__r.TNS_Id__c, Training_Session__r.Name, Farm_Visited__r.Name, Household_PIMA_ID__c, Farmer_Trainer__r.Name, Visit_Has_Training__c, Date_Visited__c FROM Farm_Visit__c WHERE Training_Group__c = '" +
+    //         tg_id +
+    //         "'"
     //     );
-    //     startOfLastWeek.setHours(0, 0, 0, 0); // Start of the day
-    //     let endOfLastWeek = new Date(startOfLastWeek);
-    //     endOfLastWeek.setDate(startOfLastWeek.getDate() + 6);
-    //     endOfLastWeek.setHours(23, 59, 59, 999); // End of the day
 
-    //     let startOfLastWeekStr = startOfLastWeek.toISOString().slice(0, 10);
-    //     let endOfLastWeekStr = endOfLastWeek.toISOString().slice(0, 10);
-
-    //     const tg_ids_string = tg_ids.map((id) => `'${id}'`).join(", ");
-    //     const query = `
-    //           SELECT Id, Name, Best_Practice_Adoption__c, Farm_Visit__c,
-    //                 Farm_Visit__r.Name, Farm_Visit__r.Training_Group__r.Name,
-    //                 Farm_Visit__r.Training_Group__r.TNS_Id__c, Farm_Visit__r.Training_Session__r.Name,
-    //                 Farm_Visit__r.Farm_Visited__r.Name, Farm_Visit__r.Household_PIMA_ID__c,
-    //                 Farm_Visit__r.Farmer_Trainer__r.Name, Farm_Visit__r.Farmer_Trainer__c,
-    //                 Farm_Visit__r.Visit_Has_Training__c, Farm_Visit__r.Date_Visited__c,
-    //                 number_of_main_stems_on_majority_trees__c, photo_of_trees_and_average_main_stems__c,
-    //                 Main_Stems_Photo_Status__c, health_of_new_planting_choice__c, Color_of_coffee_tree_leaves__c,
-    //                 how_many_weeds_under_canopy_and_how_big__c, photo_of_weeds_under_the_canopy__c,
-    //                 Weeds_Under_Canopy_Photo_Status__c, take_a_photo_of_erosion_control__c,
-    //                 Erosion_Control_Photo_Status__c, level_of_shade_present_on_the_farm__c,
-    //                 photo_of_level_of_shade_on_the_plot__c, Level_Of_Shade_Plot_Photo_Status__c,
-    //                 planted_intercrop_bananas__c, photograph_intercrop_bananas__c, Intercrop_Bananas_Photo_Status__c,
-    //                 do_you_have_a_record_book__c, are_there_records_on_the_record_book__c,
-    //                 take_a_photo_of_the_record_book__c, Record_Book_Photo_Status__c,
-    //                 Do_you_have_compost_manure__c, photo_of_the_compost_manure__c, Compost_Manure_Photo_Status__c
-    //           FROM FV_Best_Practices__c
-    //           WHERE Farm_Visit__r.Training_Group__c IN (${tg_ids_string}) LIMIT 3
-    //         `;
-
-    //     //  AND Farm_Visit__r.Date_Visited__c >= ${startOfLastWeekStr}
-    //     // AND Farm_Visit__r.Date_Visited__c <= ${endOfLastWeekStr}
-
-    //     let result = await sf_conn.query(query);
-    //     console.log(result);
-
-    //     farmVisits = farmVisits.concat(result.records);
-
-    //     // Check if there are more records to retrieve
-    //     while (result.done === false) {
-    //       // Use queryMore to retrieve additional records
-    //       result = await sf_conn.queryMore(result.nextRecordsUrl);
-    //       farmVisits = farmVisits.concat(result.records);
-    //     }
-
-    //     if (farmVisits.length === 0) {
+    //     if (farmVisits.totalSize === 0) {
     //       return {
-    //         message: "Farm Visits not found",
+    //         message: "Farm Visit not found",
     //         status: 404,
     //       };
     //     }
-
-    //     console.log(`found ${farmVisits.length} best adoption practices`);
 
     //     return {
-    //       message: "Best Practices fetched successfully",
+    //       message: "Farm Visits fetched successfully",
     //       status: 200,
-    //       farmVisits: farmVisits.map(async (bp) => {
+    //       farmVisits: farmVisits.records.map(async (fv) => {
     //         return {
-    //           // bp_id: bp.Id,
-    //           fv_id: bp.Farm_Visit__c,
-    //           fv_name: bp.Farm_Visit__r.Name,
-    //           training_group: bp.Farm_Visit__r.Training_Group__r.Name,
-    //           training_session: "j",
-    //           tns_id: bp.Farm_Visit__r.Training_Group__r.TNS_Id__c,
-    //           farm_visited: bp.Farm_Visit__r.Farm_Visited__r.Name,
-    //           household_id: bp.Farm_Visit__r.Household_PIMA_ID__c,
-    //           farmer_trainer: bp.Farm_Visit__r.Farmer_Trainer__r.Name,
-    //           has_training: "123",
-    //           date_visited: bp.Farm_Visit__r.Date_Visited__c,
-    //           status: "not_reviewed",
-    //           qas: [
-    //             {
-    //               practice_name_id: "Compost",
-    //               practice_name: "Compost",
-    //               questions: [
-    //                 "Do you have compost manure?",
-    //                 "Take a photo of the compost manure",
-    //                 "Status of the photo",
-    //               ],
-    //               answers: [
-    //                 bp.Do_you_have_compost_manure__c,
-    //                 await fetchImage(bp.photo_of_the_compost_manure__c),
-    //                 !bp.Compost_Manure_Photo_Status__c
-    //                   ? "not_verified"
-    //                   : bp.Compost_Manure_Photo_Status__c,
-    //               ],
-    //             },
-    //             {
-    //               practice_name_id: "RecordBook",
-    //               practice_name: "Record Book",
-    //               questions: [
-    //                 "Do you have a record book?",
-    //                 "Are there records on the record book?",
-    //                 "Take a photo of the record book",
-    //                 "Status of the photo",
-    //               ],
-    //               answers: [
-    //                 bp.do_you_have_a_record_book__c,
-    //                 bp.are_there_records_on_the_record_book__c,
-    //                 await fetchImage(bp.take_a_photo_of_the_record_book__c),
-    //                 !bp.Record_Book_Photo_Status__c
-    //                   ? "not_verified"
-    //                   : bp.Record_Book_Photo_Status__c,
-    //               ],
-    //             },
-    //             {
-    //               practice_name_id: "ErosionControl",
-    //               practice_name: "Erosion Control",
-    //               questions: [
-    //                 "Erosion Control Methods Seen",
-    //                 "Take a photo of erosion control",
-    //                 "Status of the photo",
-    //               ],
-    //               answers: [
-    //                 await getFVMethods("Erosion Control", bp.Id, sf_conn),
-    //                 await fetchImage(bp.take_a_photo_of_erosion_control__c),
-    //                 !bp.Erosion_Control_Photo_Status__c
-    //                   ? "not_verified"
-    //                   : bp.Erosion_Control_Photo_Status__c,
-    //               ],
-    //             },
-    //             {
-    //               practice_name_id: "IPDM",
-    //               practice_name: "IPDM",
-    //               questions: ["Pest and Disease Management: Methods Used"],
-    //               answers: [
-    //                 getFVMethods(
-    //                   "Management of Coffee Berry Borer (CBB)",
-    //                   bp.Id,
-    //                   sf_conn
-    //                 ),
-    //               ],
-    //             },
-    //             {
-    //               practice_name_id: "Nutrition",
-    //               practice_name: "Nutrition",
-    //               questions: [
-    //                 "Colour of the coffee  leaves in the field",
-    //                 "Chemicals and Fertilizers Applied",
-    //               ],
-    //               answers: [
-    //                 bp.Color_of_coffee_tree_leaves__c,
-    //                 getFVMethods(
-    //                   "Chemicals and Fertilizers Applied",
-    //                   bp.Id,
-    //                   sf_conn
-    //                 ),
-    //               ],
-    //             },
-    //             {
-    //               practice_name_id: "Shade",
-    //               practice_name: "Shade Management",
-    //               questions: [
-    //                 "What is the level of shade present on the farm?",
-    //                 "Take a photo of the level of shade on the plot",
-    //                 "Status of the photo",
-    //               ],
-    //               answers: [
-    //                 bp.level_of_shade_present_on_the_farm__c,
-    //                 await fetchImage(bp.photo_of_level_of_shade_on_the_plot__c),
-    //                 !bp.Level_Of_Shade_Plot_Photo_Status__c
-    //                   ? "not_verified"
-    //                   : bp.Level_Of_Shade_Plot_Photo_Status__c,
-    //               ],
-    //             },
-    //             {
-    //               practice_name_id: "Weeding",
-    //               practice_name: "Weeding",
-    //               questions: [
-    //                 "Has the coffee field been dug, including under the canopy?",
-    //                 "How many weeds are under the canopy and how big are they?",
-    //                 "Take a photo of the weeds under the canopy",
-    //                 "Status of the photo",
-    //               ],
-    //               answers: [
-    //                 bp.has_coffee_field_been_dug__c,
-    //                 bp.how_many_weeds_under_canopy_and_how_big__c,
-    //                 await fetchImage(bp.photo_of_weeds_under_the_canopy__c),
-    //                 !bp.Weeds_Under_Canopy_Photo_Status__c
-    //                   ? "not_verified"
-    //                   : bp.Weeds_Under_Canopy_Photo_Status__c,
-    //               ],
-    //             },
-    //             {
-    //               practice_name_id: "Stumping",
-    //               practice_name: "Stumping",
-    //               questions: [
-    //                 "Has the farmer stumped any coffee trees in the field visited since training started?",
-    //                 "Which year did you stump some trees in this field?",
-    //                 "On average, how many main stems are on the stumped trees?",
-    //                 "Status of the photo",
-    //               ],
-    //               answers: [
-    //                 bp.how_many_weeds_under_canopy_and_how_big__c,
-    //                 bp.year_stumping__c,
-    //                 bp.main_stems_in_majority_coffee_trees__c,
-    //                 await fetchImage(bp.photos_of_stumped_coffee_trees__c),
-    //                 !bp.Stumping_Photo_Status__c
-    //                   ? "not_verified"
-    //                   : bp.Stumping_Photo_Status__c,
-    //               ],
-    //             },
-    //             // {
-    //             //   practice_name_id: "SuckerSelection",
-    //             //   practice_name: "Sucker Selection",
-    //             //   questions: [
-    //             //     "Has the farmer stumped any coffee trees in the field visited since training started?",
-    //             //     "Which year did you stump some trees in this field?",
-    //             //     "On average, how many main stems are on the stumped trees?",
-    //             //     "Status of the photo",
-    //             //   ],
-    //             //   answers: [
-    //             //     bp.how_many_weeds_under_canopy_and_how_big__c,
-    //             //     bp.year_stumping__c,
-    //             //     bp.main_stems_in_majority_coffee_trees__c,
-    //             //     await fetchImage(bp.photos_of_stumped_coffee_trees__c),
-    //             //     !bp.Stumping_Photo_Status__c
-    //             //       ? "not_verified"
-    //             //       : bp.Stumping_Photo_Status__c,
-    //             //   ],
-    //             // },
-    //             {
-    //               practice_name_id: "Pruning",
-    //               practice_name: "Pruning",
-    //               questions: ["Pruning Methods used"],
-    //               answers: [getFVMethods("Pruning", bp.Id, sf_conn)],
-    //             },
-
-    //             {
-    //               practice_name_id: "HealthofNewPlanting",
-    //               practice_name: "Health of New Planting",
-    //               questions: [
-    //                 "What is the health of the new planting choice?",
-    //                 "What is the color of the coffee tree leaves?",
-    //               ],
-    //               answers: [
-    //                 bp.health_of_new_planting_choice__c,
-    //                 bp.color_of_coffee_tree_leaves__c,
-    //               ],
-    //             },
-    //             {
-    //               practice_name_id: "MainStems",
-    //               practice_name: "Main Stems",
-    //               questions: [
-    //                 "How many main stems are on the majority of the trees?",
-    //                 "Take a photo of the trees and average main stems",
-    //                 "Status of the photo",
-    //               ],
-    //               answers: [
-    //                 bp.number_of_main_stems_on_majority_trees__c,
-    //                 await fetchImage(
-    //                   bp.photo_of_trees_and_average_main_stems__c
-    //                 ),
-    //                 !bp.Main_Stems_Photo_Status__c
-    //                   ? "not_verified"
-    //                   : bp.Main_Stems_Photo_Status__c,
-    //               ],
-    //             },
-    //           ],
+    //           fv_id: fv.Id,
+    //           fv_name: fv.Name,
+    //           training_group: fv.Training_Group__r.Name,
+    //           training_session: fv.Training_Session__r
+    //             ? fv.Training_Session__r.Name
+    //             : "N/A",
+    //           tns_id: fv.Training_Group__r.TNS_Id__c || "N/A",
+    //           farm_visited: fv.Farm_Visited__r
+    //             ? fv.Farm_Visited__r.Name
+    //             : "N/A",
+    //           household_id: fv.Household_PIMA_ID__c || "N/A",
+    //           farmer_trainer: fv.Farmer_Trainer__r.Name || "N/A",
+    //           has_training: fv.Visit_Has_Training__c || "No",
+    //           date_visited: fv.Date_Visited__c,
     //         };
     //       }),
     //     };
-    //   } catch (err) {
-    //     console.log(err);
+    //   } catch (error) {
+    //     console.log(error);
 
     //     return {
-    //       message: "Something went wrong",
-    //       status: err.status,
+    //       message: error.message,
+    //       status: error.status,
     //     };
     //   }
     // },
 
-    getFVQAsByProjectInExcel: async (
-      _,
-      { project_id, practice_name },
-      { sf_conn }
-    ) => {
-      try {
-        const tg_ids = await getTrainingGroupIds(sf_conn, project_id);
-        const fields = getFieldsByPracticeName(practice_name);
+    // getFarmVisitsBySession: async (_, { ts_id }, { sf_conn }) => {
+    //   try {
+    //     // check if training group exists by tg_id
+    //     const training_session = await sf_conn.query(
+    //       `SELECT Id FROM Training_Session__c WHERE Id = '${ts_id}'`
+    //     );
 
-        const tg_ids_string = tg_ids.map((id) => `'${id}'`).join(", ");
-        const fields_bp_string = fields.map((field) => field.field).join(", ");
-        const fields_picture_string = fields
-          .map((field) => field.picture)
-          .join(", ");
-        const fields_status_string = fields
-          .map((field) => field.isVerified)
-          .join(", ");
+    //     if (training_session.totalSize === 0) {
+    //       return {
+    //         message: "Training Session not found",
+    //         status: 404,
+    //       };
+    //     }
 
-        const query = `
-          SELECT Id, Name, Best_Practice_Adoption__c, Farm_Visit__c,
-                 Farm_Visit__r.Name, Farm_Visit__r.Training_Group__r.Name,
-                 Farm_Visit__r.Training_Group__r.TNS_Id__c, Farm_Visit__r.Training_Session__r.Name,
-                 Farm_Visit__r.Farm_Visited__r.Name, Farm_Visit__r.Household_PIMA_ID__c,
-                 Farm_Visit__r.Farm_Visited__r.TNS_Id__C,
-                 Farm_Visit__r.Farmer_Trainer__r.Name, Farm_Visit__r.Farmer_Trainer__c,
-                 Farm_Visit__r.Date_Visited__c,
-                 ${fields_bp_string},
-                 ${fields_picture_string},
-                 ${fields_status_string}
-          FROM FV_Best_Practices__c 
-          WHERE Farm_Visit__r.Training_Group__c IN (${tg_ids_string})
-        `;
+    //     const farmVisits = await sf_conn.query(
+    //       "SELECT Id, Name, Training_Group__r.Name, Training_Group__r.TNS_Id__c, Training_Session__r.Name, Farm_Visited__r.Name, Household_PIMA_ID__c, Farmer_Trainer__r.Name, Visit_Has_Training__c, Date_Visited__c FROM Farm_Visit__c WHERE Training_Session__c = '" +
+    //         ts_id +
+    //         "'"
+    //     );
 
-        const result = await sf_conn.query(query);
+    //     if (farmVisits.totalSize === 0) {
+    //       return {
+    //         message: "Farm Visit not found",
+    //         status: 404,
+    //       };
+    //     }
 
-        if (result.totalSize === 0) {
-          throw new Error("Farm Visits not found");
-        }
+    //     return {
+    //       message: "Farm Visits fetched successfully",
+    //       status: 200,
+    //       farmVisits: farmVisits.records.map(async (fv) => {
+    //         return {
+    //           fv_id: fv.Id,
+    //           fv_name: fv.Name,
+    //           training_group: fv.Training_Group__r.Name,
+    //           training_session: fv.Training_Session__r
+    //             ? fv.Training_Session__r.Name
+    //             : "N/A",
+    //           tns_id: fv.Training_Group__r.TNS_Id__c || "N/A",
+    //           farm_visited: fv.Farm_Visited__r
+    //             ? fv.Farm_Visited__r.Name
+    //             : "N/A",
+    //           household_id: fv.Household_PIMA_ID__c || "N/A",
+    //           farmer_trainer: fv.Farmer_Trainer__r.Name || "N/A",
+    //           has_training: fv.Visit_Has_Training__c || "No",
+    //           date_visited: fv.Date_Visited__c,
+    //         };
+    //       }),
+    //     };
+    //   } catch (error) {
+    //     console.log(error);
 
-        const resolvedFarmVisits = await Promise.all(
-          result.records.map((bp) =>
-            processFarmVisit(bp, fields, practice_name)
-          )
-        );
+    //     return {
+    //       message: error.message,
+    //       status: error.status,
+    //     };
+    //   }
+    // },
 
-        const workbook = createWorkbook(
-          resolvedFarmVisits,
-          fields,
-          practice_name
-        );
-        const buffer = await workbook.xlsx.writeBuffer();
+    // getFarmVisitsByParticipant: async (_, { part_id }, { sf_conn }) => {
+    //   try {
+    //     // check if training group exists by tg_id
+    //     const participant = await sf_conn.query(
+    //       `SELECT Id FROM Participant__c WHERE Id = '${part_id}'`
+    //     );
 
-        return {
-          message: "File generated successfully",
-          status: 200,
-          file: `data:image/excel;base64,${buffer.toString("base64")}`,
-        };
-      } catch (err) {
-        console.error("Error creating Excel file:", err);
-        throw err;
-      }
-    },
+    //     if (participant.totalSize === 0) {
+    //       return {
+    //         message: "Participant not found",
+    //         status: 404,
+    //       };
+    //     }
+
+    //     const farmVisits = await sf_conn.query(
+    //       "SELECT Id, Name, Training_Group__r.Name, Training_Group__r.TNS_Id__c, Training_Session__r.Name, Farm_Visited__r.Name, Household_PIMA_ID__c, Farmer_Trainer__r.Name, Visit_Has_Training__c, Farm_Visited__c, Date_Visited__c FROM Farm_Visit__c WHERE Farm_Visited__c = '" +
+    //         part_id +
+    //         "'"
+    //     );
+
+    //     if (farmVisits.totalSize === 0) {
+    //       return {
+    //         message: "Farm Visit not found",
+    //         status: 404,
+    //       };
+    //     }
+
+    //     return {
+    //       message: "Farm Visits fetched successfully",
+    //       status: 200,
+    //       farmVisits: farmVisits.records.map(async (fv) => {
+    //         return {
+    //           fv_id: fv.Id,
+    //           fv_name: fv.Name,
+    //           training_group: fv.Training_Group__r.Name,
+    //           training_session: fv.Training_Session__r
+    //             ? fv.Training_Session__r.Name
+    //             : "N/A",
+    //           tns_id: fv.Training_Group__r.TNS_Id__c || "N/A",
+    //           farm_visited: fv.Farm_Visited__r
+    //             ? fv.Farm_Visited__r.Name
+    //             : "N/A",
+    //           household_id: fv.Household_PIMA_ID__c || "N/A",
+    //           farmer_trainer: fv.Farmer_Trainer__r.Name || "N/A",
+    //           has_training: fv.Visit_Has_Training__c || "No",
+    //           date_visited: fv.Date_Visited__c,
+    //         };
+    //       }),
+    //     };
+    //   } catch (error) {
+    //     console.log(error);
+
+    //     return {
+    //       message: error.message,
+    //       status: error.status,
+    //     };
+    //   }
+    // },
   },
   Mutation: {
     async submitBatch(_, { input }) {
@@ -1148,134 +740,53 @@ const getTrainingGroupIds = async (sf_conn, project_id) => {
   return groupsQuery.records.map((group) => group.Id);
 };
 
-const getFieldsByPracticeName = (practice_name) => {
-  switch (practice_name) {
-    case "Compost":
-      return [
-        {
-          field: "Do_you_have_compost_manure__c",
-          question: "Do you have compost manure?",
-          picture: "photo_of_the_compost_manure__c",
-          isVerified: "Compost_Manure_Photo_Status__c",
-        },
-      ];
-    case "Record Book":
-      return [
-        {
-          field: "are_there_records_on_the_record_book__c",
-          question: "Are there records on the record book?",
-          picture: "take_a_photo_of_the_record_book__c",
-          isVerified: "Record_Book_Photo_Status__c",
-        },
-      ];
-    // Add more cases as needed
-    default:
-      throw new Error("Invalid practice name");
-  }
-};
+// const getFieldsByPracticeName = (practice_name) => {
+//   switch (practice_name) {
+//     case "Compost":
+//       return [
+//         {
+//           field: "Do_you_have_compost_manure__c",
+//           question: "Do you have compost manure?",
+//           picture: "photo_of_the_compost_manure__c",
+//           isVerified: "Compost_Manure_Photo_Status__c",
+//         },
+//       ];
+//     case "Record Book":
+//       return [
+//         {
+//           field: "are_there_records_on_the_record_book__c",
+//           question: "Are there records on the record book?",
+//           picture: "take_a_photo_of_the_record_book__c",
+//           isVerified: "Record_Book_Photo_Status__c",
+//         },
+//       ];
+//     // Add more cases as needed
+//     default:
+//       throw new Error("Invalid practice name");
+//   }
+// };
 
-const processFarmVisit = async (bp, fields, practice_name) => {
-  const visit = {
-    "Farmer PIMA ID": bp.Farm_Visit__r.Household_PIMA_ID__c,
-    "Farmer TNS ID": bp.Farm_Visit__r.Farm_Visited__r.TNS_Id__c,
-    "Date Visited": bp.Farm_Visit__r.Date_Visited__c,
-    "Farmer Name": bp.Farm_Visit__r.Farm_Visited__r.Name,
-    "Farmer Trainer": bp.Farm_Visit__r.Farmer_Trainer__r.Name,
-    "Correct Answer": "",
-  };
+// const processFarmVisit = async (bp, fields, practice_name) => {
+//   const visit = {
+//     "Farmer PIMA ID": bp.Farm_Visit__r.Household_PIMA_ID__c,
+//     "Farmer TNS ID": bp.Farm_Visit__r.Farm_Visited__r.TNS_Id__c,
+//     "Date Visited": bp.Farm_Visit__r.Date_Visited__c,
+//     "Farmer Name": bp.Farm_Visit__r.Farm_Visited__r.Name,
+//     "Farmer Trainer": bp.Farm_Visit__r.Farmer_Trainer__r.Name,
+//     "Correct Answer": "",
+//   };
 
-  for (const field of fields) {
-    visit[`${practice_name}: ${field.question}`] = bp[field.field];
-    visit[
-      `${practice_name}: Review: Correct Answer? (not_approved/approved/invalid)`
-    ] = bp[field.isVerified];
-    visit[`${practice_name}: ${field.picture}`] = await fetchImageWithRetry(
-      bp[field.picture]
-    );
-  }
+//   for (const field of fields) {
+//     visit[`${practice_name}: ${field.question}`] = bp[field.field];
+//     visit[
+//       `${practice_name}: Review: Correct Answer? (not_approved/approved/invalid)`
+//     ] = bp[field.isVerified];
+//     visit[`${practice_name}: ${field.picture}`] = await fetchImageWithRetry(
+//       bp[field.picture]
+//     );
+//   }
 
-  return visit;
-};
-
-const createWorkbook = (resolvedFarmVisits, fields, practice_name) => {
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet("Farm Visits");
-
-  const columns = [
-    { header: "Farmer PIMA ID", key: "Farmer PIMA ID", width: 30 },
-    { header: "Farmer TNS ID", key: "Farmer TNS ID", width: 30 },
-    { header: "Date Visited", key: "Date Visited", width: 30 },
-    { header: "Farmer Name", key: "Farmer Name", width: 30 },
-    { header: "Farmer Trainer", key: "Farmer Trainer", width: 30 },
-    { header: "Correct Answer", key: "Correct Answer", width: 30 },
-  ];
-
-  fields.forEach((field) => {
-    columns.push({
-      header: `${practice_name}: ${field.question}`,
-      key: `${practice_name}: ${field.question}`,
-      width: 30,
-    });
-    columns.push({
-      header: `${practice_name} Review: Correct Answer? (not_approved/approved/invalid)`,
-      key: `${practice_name}: Review: Correct Answer? (not_approved/approved/invalid)`,
-      width: 30,
-    });
-    columns.push({
-      header: `${practice_name}: ${field.picture}`,
-      key: `${practice_name}: ${field.picture}`,
-      width: 30,
-    });
-  });
-
-  worksheet.columns = columns;
-
-  resolvedFarmVisits.forEach((visit, index) => {
-    const row = worksheet.addRow(visit);
-    row.height = 100; // Adjust row height for better image alignment
-
-    fields.forEach((field) => {
-      const imageData = visit[`${practice_name}: ${field.picture}`];
-      if (imageData && imageData.startsWith("data:image")) {
-        try {
-          const imageId = workbook.addImage({
-            base64: imageData.replace(
-              /^data:image\/(png|jpg|jpeg);base64,/,
-              ""
-            ),
-            extension: "png", // Use correct extension based on image type
-          });
-
-          worksheet.addImage(imageId, {
-            tl: {
-              col: columns.findIndex(
-                (col) => col.key === `${practice_name}: ${field.picture}`
-              ),
-              row: row.number - 1,
-            },
-            ext: { width: 100, height: 100 }, // Adjust width and height as necessary
-          });
-
-          // Remove the plain text base64 from the cell to avoid confusion
-          worksheet.getCell(
-            `${
-              row.getCell(
-                columns.findIndex(
-                  (col) => col.key === `${practice_name}: ${field.picture}`
-                ) + 1
-              ).address
-            }`
-          ).value = null;
-        } catch (error) {
-          console.error(
-            `Error adding image for ${visit["Farmer PIMA ID"]}: ${error.message}`
-          );
-        }
-      }
-    });
-  });
-
-  return workbook;
-};
+//   return visit;
+// };
 
 export default FarmVisitsResolvers;

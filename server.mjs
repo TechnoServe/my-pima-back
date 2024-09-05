@@ -45,6 +45,11 @@ import PerformanceResolvers from "./src/resolvers/performance.resolvers.mjs";
 import PerformanceTypeDefs from "./src/typeDefs/performance.typeDefs.mjs";
 import { FarmVisitService } from "./src/services/farmVisit.service.mjs";
 import axios from "axios";
+import { AttendanceService } from "./src/services/attendance.service.mjs";
+import "./src/cron-jobs/attendance.cron.mjs";
+import { ParticipantsService } from "./src/services/participant.service.mjs";
+import logger from "./src/config/logger.mjs";
+import Projects from "./src/models/projects.models.mjs";
 
 const app = express();
 
@@ -61,15 +66,11 @@ app.use(function (req, res, next) {
   next();
 });
 
-// const redis = new Redis({
-//   host: "redis-18523.c311.eu-central-1-1.ec2.redns.redis-cloud.com",
-//   port: 18523,
-//   password: "l7hwHCWhtn6DqDDmzZjZkk3BvnSApgmf",
-//   retryStrategy: (times) => {
-//     // reconnect after
-//     return Math.min(times * 50, 2000);
-//   },
-// });
+const redis = new Redis({
+  host: "127.0.0.1", // localhost
+  port: 6379, // default Redis port
+  retryStrategy: (times) => Math.min(times * 50, 2000), // retry connection if it fails
+});
 
 // // Set up Redis pub-sub for real-time subscriptions (optional)
 // const pubSub = new RedisPubSub({
@@ -117,30 +118,49 @@ conn.login(
   }
 );
 
-app.get("/api", async(req, res) => {
+app.get("/api", async (req, res) => {
   await FarmVisitService.sampleFarmVisits(conn);
   res.send("Hello, My PIMA API Service!");
 });
 
-app.get('/image/:formId/:attachmentId', async (req, res) => {
+app.get("/api/cron", async (req, res) => {
+  //await AttendanceService.cacheAttendanceData(conn);
+  logger.info("Starting participants caching process...");
+  const projects = await Projects.findAll({
+    where: { project_status: "active" },
+  });
+
+  for (let project of projects) {
+    logger.info("processing project", project);
+    await ParticipantsService.fetchAndCacheParticipants(
+      conn,
+      project.sf_project_id
+    );
+  }
+
+  logger.info("Participants caching completed.");
+  res.send("Data cached successfully!");
+});
+
+app.get("/image/:formId/:attachmentId", async (req, res) => {
   const { formId, attachmentId } = req.params;
   const commcareApiUrl = `https://www.commcarehq.org/a/tns-proof-of-concept/api/form/attachment/${formId}/${attachmentId}`;
 
-  console.log(`requesting image on this url ${commcareApiUrl}`)
+  console.log(`requesting image on this url ${commcareApiUrl}`);
   try {
     const response = await axios.get(commcareApiUrl, {
       headers: {
         Authorization: `ApiKey ymugenga@tns.org:46fa5358cd802aabcc5c3b14a194464d40c564e6`,
       },
-      responseType: 'arraybuffer', // Handle binary data (e.g., images)
+      responseType: "arraybuffer", // Handle binary data (e.g., images)
     });
 
     // Set the appropriate headers and send the image back
-    res.set('Content-Type', 'image/jpeg');
+    res.set("Content-Type", "image/jpeg");
     res.send(response.data);
   } catch (error) {
-    console.error('Error fetching the image:', error);
-    res.status(500).send('Error fetching the image');
+    console.error("Error fetching the image:", error);
+    res.status(500).send("Error fetching the image");
   }
 });
 
@@ -159,7 +179,7 @@ const server = new ApolloServer({
     FarmVisitsTypeDefs,
     FVQAsTypeDefs,
     TrainingModulesTypeDefs,
-    PerformanceTypeDefs
+    PerformanceTypeDefs,
   ],
   resolvers: [
     PermissionsResolvers,
@@ -175,7 +195,7 @@ const server = new ApolloServer({
     FarmVisitsResolvers,
     FVQAsResolvers,
     TrainingModulesResolvers,
-    PerformanceResolvers
+    PerformanceResolvers,
   ],
   subscriptions: { path: "/subscriptions", onConnect: () => pubSub },
   csrfPrevention: true,
@@ -212,3 +232,5 @@ server
   .catch(function (error) {
     console.log(error);
   });
+
+export { conn };
