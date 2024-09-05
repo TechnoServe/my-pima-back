@@ -40,7 +40,8 @@ export const ParticipantsService = {
           Training_Group__r.Project_Location__c, TNS_Id__c, Status__c, Trainer_Name__c, 
           Project__c, Training_Group__c, Training_Group__r.Responsible_Staff__r.ReportsToId, 
           Household__c, Primary_Household_Member__c, Create_In_CommCare__c, Other_ID_Number__c, 
-          Phone_Number__c, Number_of_Coffee_Plots__c FROM Participant__c 
+          Phone_Number__c, Number_of_Coffee_Plots__c, Household__r.Number_of_Coffee_Plots__c
+        FROM Participant__c 
         WHERE Project__c = '${project.project_name}' AND Status__c = 'Active' 
         ORDER BY TNS_Id__c Asc, Household__r.Name Asc
       `);
