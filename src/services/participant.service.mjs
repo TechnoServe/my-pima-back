@@ -7,15 +7,15 @@ export const ParticipantsService = {
 
     try {
       // First, check the cache
-      const cachedData = await redis.get(cacheKey);
+      // const cachedData = await redis.get(cacheKey);
 
-      if (cachedData) {
-        const parsedData = JSON.parse(cachedData);
-        console.log(
-          `${parsedData.participants.length} participants for project ${projectId} retrieved from cache`
-        );
-        return parsedData;
-      }
+      // if (cachedData) {
+      //   const parsedData = JSON.parse(cachedData);
+      //   console.log(
+      //     `${parsedData.participants.length} participants for project ${projectId} retrieved from cache`
+      //   );
+      //   return parsedData;
+      // }
 
       // If no cache, check if the project exists in your local database
       const project = await Projects.findOne({
@@ -124,8 +124,8 @@ export const ParticipantsService = {
       };
 
       // Cache the response for future use
-      await redis.set(cacheKey, JSON.stringify(response), "EX", 3600);
-      console.log(`Participants data for project ${projectId} cached`);
+      // await redis.set(cacheKey, JSON.stringify(response), "EX", 3600);
+      // console.log(`Participants data for project ${projectId} cached`);
 
       return response;
     } catch (err) {
