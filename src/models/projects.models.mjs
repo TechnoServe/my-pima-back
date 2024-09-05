@@ -15,6 +15,10 @@ const Projects = sequelize.define("tbl_projects", {
     type: DataTypes.STRING(50),
     allowNull: false,
   },
+  project_country: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+  },
   project_status: {
     type: DataTypes.ENUM("active", "inactive"),
     allowNull: false,

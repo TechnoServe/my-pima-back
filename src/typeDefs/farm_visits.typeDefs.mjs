@@ -6,7 +6,9 @@ const FarmVisitsTypeDefs = gql`
     fv_name: String!
     training_group: String!
     training_session: String
-    tns_id: String
+    tg_tns_id: String
+    farmer_tns_id: String
+    household_tns_id: String
     farm_visited: String
     household_id: String!
     farmer_trainer: String!
@@ -30,12 +32,78 @@ const FarmVisitsTypeDefs = gql`
     getFarmVisitsByGroup(tg_id: String!): AllFarmVisitsResponse
     getFarmVisitsBySession(ts_id: String!): AllFarmVisitsResponse
     getFarmVisitsByParticipant(part_id: String!): AllFarmVisitsResponse
-    getFVQAsByProjectForReview(project_id: String!, limit: Int, offset: Int): AllFarmVisitsResponse
+    getFVQAsByProjectForReview(
+      project_id: String!
+      limit: Int
+      offset: Int
+    ): AllFarmVisitsResponse
     getFVQAsByHousehold(project_id: String!): [getFVQAsByHouseholdResponse]
-    getFVQAsByProjectInExcel(project_id: String!, practice_name: String!): FileExport
+    getFVQAsByProjectInExcel(
+      project_id: String!
+      practice_name: String!
+    ): FileExport
+    getSampledVisitsStats(projectId: String!): VisitStats
+    getBestPracticeReviewStats(
+      projectId: String!
+      practiceName: String!
+    ): PracticeStats
+    getPaginatedReviews(
+      projectId: String!
+      practiceName: String!
+      page: Int!
+      pageSize: Int!
+    ): [FarmVisit]
+    generateFarmVisitReport(projectId: String!): FileExport
   }
 
-  type getFVQAsByHouseholdResponse{
+  type VisitStats {
+    totalSampledVisits: Int
+    totalReviewed: Int
+    remainingVisits: Int
+  }
+
+  type PracticeStats {
+    reviewedVisits: Int
+    remainingVisits: Int
+    totalVisits: Int
+  }
+
+  type FarmVisit {
+    visit_id: ID!
+    sf_visit_id: String
+    farmer_name: String
+    farmer_pima_id: String
+    farmer_tns_id: String
+    date_visited: String
+    farmer_trainer: String
+    BestPractices: [BestPractice]
+  }
+
+  type BestPractice {
+    practice_id: ID!
+    practice_name: String
+    image_url: String
+    sf_practice_id: String
+    question: String
+    answer: String
+  }
+
+  type Mutation {
+    submitBatch(input: [BatchInput!]!): BatchResponse!
+  }
+
+  input BatchInput {
+    practice_id: ID!
+    correct_answer: String!
+    comment: String
+    user_id: ID!
+  }
+
+  type BatchResponse {
+    success: Boolean!
+    message: String
+  }
+  type getFVQAsByHouseholdResponse {
     FV_SF_ID: String!
     gender: String!
     fieldAge: Int
@@ -80,13 +148,12 @@ const FarmVisitsTypeDefs = gql`
     IPDM_Pass: String
     Pruning_Pass: String
     ErosionControl_Pass: String
-
   }
 
   type FileExport {
     message: String!
     status: Int!
-    file: String!
+    file: String
   }
 
   type AllFarmVisitsResponse {
