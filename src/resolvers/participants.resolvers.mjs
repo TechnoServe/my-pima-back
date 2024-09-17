@@ -3,130 +3,23 @@ import { join, parse } from "path";
 import fs, { createWriteStream } from "fs";
 import { getDirName } from "../utils/getDirName.mjs";
 import ExcelJS from "exceljs";
+import { ParticipantsService } from "../services/participant.service.mjs";
 
 const ParticipantsResolvers = {
   Query: {
     getParticipantsByProject: async (_, { project_id }, { sf_conn }) => {
       try {
-        // check if project exists by project_id
-        const project = await Projects.findOne({
-          where: { sf_project_id: project_id },
-        });
-
-        if (!project) {
-          return {
-            message: "Project not found",
-            status: 404,
-          };
-        }
-
-        let participants = [];
-
-        // Perform the initial query
-        let result = await sf_conn.query(
-          `SELECT Id, Name, Middle_Name__c, Last_Name__c, Gender__c, Age__c, 
-            Household__r.Farm_Size__c, Household__r.Name, Training_Group__r.TNS_Id__c, 
-            Training_Group__r.Project_Location__c, TNS_Id__c, Status__c, Trainer_Name__c, 
-            Project__c, Training_Group__c, Training_Group__r.Responsible_Staff__r.ReportsToId, 
-            Household__c, Primary_Household_Member__c, Create_In_CommCare__c, Other_ID_Number__c, 
-            Phone_Number__c, Number_of_Coffee_Plots__c, Household__r.Number_of_Coffee_Plots__c FROM Participant__c 
-           WHERE Project__c = '${project.project_name}' AND Status__c = 'Active' 
-          ORDER BY TNS_Id__c Asc, Household__r.Name Asc`
+        const result = await ParticipantsService.fetchAndCacheParticipants(
+          sf_conn,
+          project_id
         );
-
-        participants = participants.concat(result.records);
-
-        // Check if there are more records to retrieve
-        while (result.done === false) {
-          // Use queryMore to retrieve additional records
-          result = await sf_conn.queryMore(result.nextRecordsUrl);
-          participants = participants.concat(result.records);
-        }
-
-        if (participants.totalSize === 0) {
-          return {
-            message: "Participants not found",
-            status: 404,
-          };
-        }
-
-        // Parallelize additional queries using Promise.all
-        const [res1, reportsTo] = await Promise.all([
-          sf_conn.query(`SELECT Id, Location__r.Name FROM Project_Location__c`),
-          sf_conn.query(`SELECT Id, Name FROM Contact`),
-        ]);
-
-        console.log("example participant", participants.slice(0, 5));
-
-        return {
-          message: "Participants fetched successfully",
-          status: 200,
-          participants: participants.map(async (participant) => {
-            return {
-              p_id: participant.Id,
-              first_name: participant.Name,
-              middle_name: participant.Middle_Name__c,
-              last_name: participant.Last_Name__c,
-              age: participant.Age__c,
-              coffee_tree_numbers: participant.Household__c
-                ? participant.Household__r.Farm_Size__c
-                : "ERROR HERE! Please report to the PIMA team",
-              hh_number: participant.Household__c
-                ? participant.Household__r.Name
-                : "ERROR HERE! Please report to the PIMA team",
-              ffg_id: participant.Training_Group__r.TNS_Id__c,
-              gender: participant.Gender__c,
-              location:
-                res1.records.find(
-                  (location) =>
-                    location.Id ===
-                    participant.Training_Group__r.Project_Location__c
-                ) === undefined
-                  ? "N/A"
-                  : res1.records.find(
-                      (location) =>
-                        location.Id ===
-                        participant.Training_Group__r.Project_Location__c
-                    ).Location__r.Name,
-              tns_id: participant.TNS_Id__c,
-              status: participant.Status__c,
-              farmer_trainer: participant.Trainer_Name__c,
-              business_advisor:
-                reportsTo.records.find(
-                  (contact) =>
-                    contact.Id ===
-                    participant.Training_Group__r.Responsible_Staff__r
-                      .ReportsToId
-                ) === undefined
-                  ? null
-                  : reportsTo.records.find(
-                      (contact) =>
-                        contact.Id ===
-                        participant.Training_Group__r.Responsible_Staff__r
-                          .ReportsToId
-                    ).Name,
-              project_name: participant.Project__c,
-              training_group: participant.Training_Group__c,
-              household_id: participant.Household__c,
-              primary_household_member:
-                participant.Primary_Household_Member__c == "Yes" ? 1 : 2,
-              create_in_commcare: participant.Create_In_CommCare__c,
-              coop_membership_number: participant.Other_ID_Number__c,
-              phone_number: participant.Phone_Number__c,
-              number_of_coffee_plots: participant.Household__c
-                ? participant.Household__r.Number_of_Coffee_Plots__c === ""
-                  ? participant.Number_of_Coffee_Plots__c
-                  : participant.Household__r.Number_of_Coffee_Plots__c
-                : "ERROR HERE! Please report to the PIMA team",
-            };
-          }),
-        };
+        return result; // Return the standardized response directly
       } catch (err) {
-        console.log(err);
-
+        console.error(err);
         return {
-          message: err.message,
-          status: err.status,
+          message: "An error occurred while fetching participants",
+          status: 500,
+          participants: [],
         };
       }
     },
@@ -1290,7 +1183,7 @@ function formatParticipantData(fileData, trainingGroupsMap, recentHHData) {
     tns_id: "TNS_Id__c",
     gender: "Gender__c",
     age: "Age__c",
-    "Phone Number": "Phone_Number__c",
+    phone_number: "Phone_Number__c",
     coffee_tree_numbers: "Farm_Size__c",
     ffg_id: "ffg_id",
     status: "Status__c",
@@ -1307,7 +1200,7 @@ function formatParticipantData(fileData, trainingGroupsMap, recentHHData) {
     "Last_Name__c",
     "Gender__c",
     "Age__c",
-    //"Phone_Number__c",
+    "Phone_Number__c",
     "Primary_Household_Member__c",
     "TNS_Id__c",
     "Training_Group__c",
@@ -1740,7 +1633,7 @@ async function queryExistingParticipants(sf_conn, participantsData) {
   for (let i = 0; i < participantIds.length; i += batchSize) {
     const batchIds = participantIds.slice(i, i + batchSize);
     const queryResult = await sf_conn.query(
-      `SELECT Id, Name, Training_Group__c, TNS_Id__c, 
+      `SELECT Id, Name, Training_Group__c, TNS_Id__c, Phone_Number__c, 
           Middle_Name__c, Last_Name__c, Gender__c, Age__c, Primary_Household_Member__c, 
           Household__c, Status__c, Other_ID_Number__c, Number_of_Coffee_Plots__c
         FROM Participant__c WHERE Id IN ('${batchIds.join("','")}')`
@@ -1901,6 +1794,7 @@ function didParticipantValuesChange(sfParticipant, itemToInsert) {
     sfParticipant.Household__c === itemToInsert.Household__c &&
     sfParticipant.Status__c === itemToInsert.Status__c &&
     sfParticipant.Gender__c === itemToInsert.Gender__c &&
+    normalize(sfParticipant.Phone_Number__c) === normalize(itemToInsert.Phone_Number__c) &&
     //sfParticipant.Number_of_Coffee_Plots__c === numberOfTrees &&
     middleNameComparison && // Include the modified comparison for Middle_Name__c
     lastNameComparison && // Include the modified comparison for Last_Name__c
