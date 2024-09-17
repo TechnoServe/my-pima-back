@@ -1183,7 +1183,7 @@ function formatParticipantData(fileData, trainingGroupsMap, recentHHData) {
     tns_id: "TNS_Id__c",
     gender: "Gender__c",
     age: "Age__c",
-    "Phone Number": "Phone_Number__c",
+    phone_number: "Phone_Number__c",
     coffee_tree_numbers: "Farm_Size__c",
     ffg_id: "ffg_id",
     status: "Status__c",
@@ -1200,7 +1200,7 @@ function formatParticipantData(fileData, trainingGroupsMap, recentHHData) {
     "Last_Name__c",
     "Gender__c",
     "Age__c",
-    //"Phone_Number__c",
+    "Phone_Number__c",
     "Primary_Household_Member__c",
     "TNS_Id__c",
     "Training_Group__c",
@@ -1633,7 +1633,7 @@ async function queryExistingParticipants(sf_conn, participantsData) {
   for (let i = 0; i < participantIds.length; i += batchSize) {
     const batchIds = participantIds.slice(i, i + batchSize);
     const queryResult = await sf_conn.query(
-      `SELECT Id, Name, Training_Group__c, TNS_Id__c, 
+      `SELECT Id, Name, Training_Group__c, TNS_Id__c, Phone_Number__c, 
           Middle_Name__c, Last_Name__c, Gender__c, Age__c, Primary_Household_Member__c, 
           Household__c, Status__c, Other_ID_Number__c, Number_of_Coffee_Plots__c
         FROM Participant__c WHERE Id IN ('${batchIds.join("','")}')`
@@ -1794,6 +1794,7 @@ function didParticipantValuesChange(sfParticipant, itemToInsert) {
     sfParticipant.Household__c === itemToInsert.Household__c &&
     sfParticipant.Status__c === itemToInsert.Status__c &&
     sfParticipant.Gender__c === itemToInsert.Gender__c &&
+    normalize(sfParticipant.Phone_Number__c) === normalize(itemToInsert.Phone_Number__c) &&
     //sfParticipant.Number_of_Coffee_Plots__c === numberOfTrees &&
     middleNameComparison && // Include the modified comparison for Middle_Name__c
     lastNameComparison && // Include the modified comparison for Last_Name__c
