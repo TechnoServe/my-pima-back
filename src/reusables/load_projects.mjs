@@ -5,10 +5,13 @@ const loadSFProjects = async (conn) => {
     total_new_projects = 0;
   try {
     records = await conn.query(
-      "SELECT Id, Name, Project_Status__c, Project_Country__c FROM Project__c WHERE Project_Status__c = 'Active'"
+      "SELECT Id, Name, Project_Status__c, Project_Country__c, Project_Country__r.Name FROM Project__c WHERE Project_Status__c = 'Active'"
     );
 
+    console.log(records.records.slice(0, 4))
+
     const promises = records.records.map(async (record) => {
+      console.log(record)
       const project = await Projects.findOne({
         where: { sf_project_id: record.Id },
       });
@@ -17,7 +20,7 @@ const loadSFProjects = async (conn) => {
         await Projects.create({
           sf_project_id: record.Id,
           project_name: record.Name,
-          project_country: record.Project_Country__c,
+          project_country: record.Project_Country__c ? record.Project_Country__r.Name : '',
         });
       } else {
         await Projects.update(
@@ -25,7 +28,7 @@ const loadSFProjects = async (conn) => {
             project_name: record.Name,
             status:
               record.Project_Status__c === "Active" ? "active" : "inactive",
-            project_country: record.Project_Country__c,
+            project_country: record.Project_Country__c ? record.Project_Country__r.Name : '',
           },
           {
             where: { sf_project_id: record.Id },

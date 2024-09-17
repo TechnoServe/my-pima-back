@@ -1,6 +1,10 @@
 import { gql } from "apollo-server-express";
 
+
 const TrainingSessionsTypeDefs = gql`
+
+  scalar Date
+
   type TrainingSession {
     ts_id: ID!
     ts_name: String!
@@ -19,17 +23,30 @@ const TrainingSessionsTypeDefs = gql`
   }
 
   type Query {
-    trainingSessions: AllTrainingSessionsResponse
-    trainingSession(ts_id: ID!): TrainingSessionResponse
     trainingSessionsByProject(
       sf_project_id: String!
     ): AllTrainingSessionsResponse
     trainingSessionsByGroup(tg_id: String!): AllTrainingSessionsResponse
     trainingSessionImage(ts_id: ID!): TrainingSessionImageResponse
+    sampledTrainingSessions(sf_project_id: String!): [SampledSession]
   }
 
   type Mutation {
     validateSession(ts_id: ID!, status: String!): TrainingSessionResponse
+  }
+
+  type SampledSession {
+    id: String!
+    training_module_name: String!
+    tg_name: String!
+    tg_tns_id: String!
+    total_attendance: Int!
+    male_attendance: Int!
+    female_attendance: Int!
+    farmer_trainer_name: String!
+    session_image_url: String!
+    session_date: Date!
+    image_review_result: String
   }
 
   type AllTrainingSessionsResponse {
