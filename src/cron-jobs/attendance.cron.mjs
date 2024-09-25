@@ -17,23 +17,23 @@ cron.schedule("0 * * * *", async () => {
 });
 
 // Schedule to fetch participants every hour
-cron.schedule("0 * * * *", async () => {
-  try {
-    logger.info("Starting participants caching process...");
-    const projects = await Projects.findAll({
-      where: { project_status: "active" },
-    });
+// cron.schedule("0 * * * *", async () => {
+//   try {
+//     logger.info("Starting participants caching process...");
+//     const projects = await Projects.findAll({
+//       where: { project_status: "active" },
+//     });
 
-    for (let project of projects) {
-      logger.info("processing project", project);
-      await ParticipantsService.fetchAndCacheParticipants(
-        conn,
-        project.sf_project_id
-      );
-    }
+//     for (let project of projects) {
+//       logger.info("processing project", project);
+//       await ParticipantsService.fetchAndCacheParticipants(
+//         conn,
+//         project.sf_project_id
+//       );
+//     }
 
-    logger.info("Participants caching completed.");
-  } catch (error) {
-    logger.info("Error in participants caching process:", error);
-  }
-});
+//     logger.info("Participants caching completed.");
+//   } catch (error) {
+//     logger.info("Error in participants caching process:", error);
+//   }
+// });
