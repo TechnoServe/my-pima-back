@@ -1157,6 +1157,11 @@ function formatHHData(fileData) {
         formattedRow["Name"] = householdNumber;
       }
 
+      formattedRow["Household_ID__c"] =
+        values[header.indexOf("ffg_id")].replace(/"/g, "") +
+        householdNumber +
+        values[header.indexOf("Primary_Household_Member__c")].replace(/"/g, "");
+
       formattedRow["Household_Number__c"] = parseInt(householdNumber); // Store cleaned-up number
 
       acc.push(formattedRow);
@@ -1416,7 +1421,7 @@ async function updateHouseholdsInSalesforce(
 
     const householdQueries = batchedHouseholdNumbers.map((batch) => {
       return sf_conn.query(
-        `SELECT Id, Farm_Size__c, Number_of_Coffee_Plots__c, Household_Number__c, Name, Number_of_Members__c, training_group__c 
+        `SELECT Id, Farm_Size__c, Number_of_Coffee_Plots__c, Household_ID__c, Household_Number__c, Name, Number_of_Members__c, training_group__c 
         FROM Household__c WHERE Id IN ('${batch.join("','")}')`
       );
     });
@@ -1740,7 +1745,8 @@ function didHouseholdValuesChange(sfHousehold, itemToInsert) {
     sfHousehold.Farm_Size__c === farmSize &&
     sfHousehold.Name === itemToInsert.Name &&
     sfHousehold.Number_of_Members__c === itemToInsert.Number_of_Members__c &&
-    sfHousehold.Training_Group__c === itemToInsert.Training_Group__c
+    sfHousehold.Training_Group__c === itemToInsert.Training_Group__c &&
+    sfHousehold.Household_ID__c === itemToInsert.Household_ID__c
   );
 }
 
@@ -1794,7 +1800,8 @@ function didParticipantValuesChange(sfParticipant, itemToInsert) {
     sfParticipant.Household__c === itemToInsert.Household__c &&
     sfParticipant.Status__c === itemToInsert.Status__c &&
     sfParticipant.Gender__c === itemToInsert.Gender__c &&
-    normalize(sfParticipant.Phone_Number__c) === normalize(itemToInsert.Phone_Number__c) &&
+    normalize(sfParticipant.Phone_Number__c) ===
+      normalize(itemToInsert.Phone_Number__c) &&
     //sfParticipant.Number_of_Coffee_Plots__c === numberOfTrees &&
     middleNameComparison && // Include the modified comparison for Middle_Name__c
     lastNameComparison && // Include the modified comparison for Last_Name__c
