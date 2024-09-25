@@ -1,4 +1,5 @@
 import Projects from "../models/projects.models.mjs";
+import { TsSampleRepository } from "../repositories/ts_sample.repository.mjs";
 import { TSessionService } from "../services/tsessions.service.mjs";
 import fetchImage from "../utils/commCareApi.mjs";
 
@@ -189,58 +190,27 @@ const TrainingSessionsResolvers = {
   },
 
   Mutation: {
-    validateSession: async (_, { ts_id, status }, { sf_conn }) => {
-      const valid_statuses = ["not_verified", "approved", "invalid", "unclear"];
-
-      if (!valid_statuses.includes(status)) {
-        return {
-          message: "Invalid status",
-          status: 400,
-        };
-      }
+    validateSession: async (_, { input }) => {
 
       try {
-        // check if training session exists in soql query
-        const res = await sf_conn.sobject("Training_Session__c").update(
-          {
-            Id: ts_id,
-            Session_Image_Status__c: valid_statuses.includes(status)
-              ? status
-              : "not_verified",
-            Verified__c: status === valid_statuses[0] ? false : true,
-          },
-          function (err, ret) {
-            if (err || !ret.success) {
-              return {
-                message: err.message,
-                status: err.status,
-              };
-            }
+        // Use bulkUpdate from the repository for each input
+        const updates = input.map((item) => ({
+          values: { image_review_result: item.status, last_reviewed_by: item.userId }, // Fields to update
+          where: { id: item.sessionId }, // Where condition using tsId
+        }));
 
-            return ret;
-          }
-        );
-
-        if (!res.success) {
-          return {
-            message: "Training session not found",
-            status: 404,
-          };
-        }
+        // Perform bulk update
+        await TsSampleRepository.bulkUpdate(updates);
 
         return {
-          message: "Training session updated successfully",
+          message: "Training sessions updated successfully",
           status: 200,
-          trainingSession: {
-            ts_id: res.id,
-          },
         };
       } catch (err) {
         console.log(err);
-
         return {
           message: err.message,
-          status: err.status,
+          status: err.status || 500,
         };
       }
     },

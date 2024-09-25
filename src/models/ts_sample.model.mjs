@@ -1,4 +1,4 @@
-import { DataTypes } from "sequelize";
+import { DataTypes } from "sequelize"; 
 import sequelize from "../config/db.mjs";
 import Users from "./users.model.mjs";
 
@@ -59,6 +59,22 @@ const TsSample = sequelize.define("tbl_ts_sample", {
       model: Users,
       key: "user_id",
     },
+  },
+  ts_latitude: {
+    type: DataTypes.DECIMAL(10, 8),
+    allowNull: true,
+  },
+  ts_longitude: {
+    type: DataTypes.DECIMAL(11, 8),
+    allowNull: true,
+  },
+  tg_latitude: {
+    type: DataTypes.DECIMAL(10, 8),
+    allowNull: true,
+  },
+  tg_longitude: {
+    type: DataTypes.DECIMAL(11, 8),
+    allowNull: true,
   },
   createdAt: {
     type: DataTypes.DATE,

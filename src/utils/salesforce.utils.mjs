@@ -127,7 +127,8 @@ export const fetchRandomTSByPId = async (
     let result = await sf_conn.query(
       `SELECT Id, Module_Name__c, Training_Module__c, Training_Group__r.Name, Training_Group__r.TNS_Id__c, 
               Male_Attendance__c, Female_Attendance__c, Trainer__r.Name, 
-              Session_Photo_URL__c, Date__c, Number_in_Attendance__c
+              Session_Photo_URL__c, Date__c, Number_in_Attendance__c, Location_GPS__Latitude__s, Location_GPS__Longitude__s,
+              Female_Count_Light_Full__c, Male_Count_Light_Full__c, Total_Count_Light_Full__c
              FROM Training_Session__c 
              WHERE Training_Group__r.Group_Status__c='Active' 
              AND Date__c >= ${lastMonday} AND Date__c <= ${lastSunday}
@@ -144,7 +145,8 @@ export const fetchRandomTSByPId = async (
     let result = await sf_conn.query(
       `SELECT Id, Module_Name__c, Training_Module__c, Training_Group__r.Name, Training_Group__r.TNS_Id__c, 
               Male_Attendance__c, Female_Attendance__c, Trainer__r.Name, 
-              Session_Photo_URL__c, Date__c, Number_in_Attendance__c
+              Session_Photo_URL__c, Date__c, Number_in_Attendance__c, Location_GPS__Latitude__s, Location_GPS__Longitude__s,
+              Female_Count_Light_Full__c, Male_Count_Light_Full__c, Total_Count_Light_Full__c
              FROM Training_Session__c 
              WHERE Training_Group__r.Group_Status__c='Active' 
              AND Date__c >= ${lastMonday} AND Date__c <= ${lastSunday}

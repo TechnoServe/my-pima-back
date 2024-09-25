@@ -12,4 +12,16 @@ export const TsSampleRepository = {
   async findAll(where) {
     return TsSample.findAll({ where });
   },
+
+  async update(values, where, options = {}) {
+    return await TsSample.update(values, { where, ...options });
+  },
+
+  async bulkUpdate(updates, options = {}) {
+    return await Promise.all(
+      updates.map(({ values, where }) =>
+        TsSample.update(values, { where, ...options })
+      )
+    );
+  },
 };

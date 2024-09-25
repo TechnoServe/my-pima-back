@@ -13,7 +13,7 @@ export const TSessionService = {
       logger.info("Started training session sampling process.");
       const projects = await Projects.findAll({
         status: "active",
-         //project_country: { [Op.not]: null },
+        //project_country: { [Op.not]: null },
       });
 
       const lastMonday = moment()
@@ -55,24 +55,12 @@ export const TSessionService = {
     }
   },
 
-  // 
+  //
   async getSampledSessions(sf_project_id) {
-    const startOfLastWeek = moment()
-      .subtract(1, "weeks")
-      .startOf("week")
-      .toDate();
-    const endOfLastWeek = moment().subtract(1, "weeks").endOf("week").toDate();
-
     // Single query
-    const hi =  await TsSampleRepository.findAll({
+    return await TsSampleRepository.findAll({
       sf_project_id: sf_project_id,
-      session_date: {
-        [Op.between]: [startOfLastWeek, endOfLastWeek],
-      },
     });
-
-    console.log(hi);
-    return hi
   },
 };
 
@@ -93,12 +81,14 @@ const saveTrainingSessions = async (sessions, sf_project_id) => {
           training_module_name: sample.Module_Name__c,
           tg_name: sample.Training_Group__r.Name,
           tg_tns_id: sample.Training_Group__r.TNS_Id__c,
-          total_attendance: sample.Number_in_Attendance__c,
-          male_attendance: sample.Male_Attendance__c,
-          female_attendance: sample.Female_Attendance__c,
+          total_attendance: sample.Male_Attendance__c ? sample.Number_in_Attendance__c : sample.Total_Count_Light_Full__c,
+          male_attendance: sample.Male_Attendance__c ? sample.Male_Attendance__c : sample.Male_Count_Light_Full__c,
+          female_attendance: sample.Female_Attendance__c ? sample.Female_Attendance__c: sample.Female_Count_Light_Full__c,
           farmer_trainer_name: sample.Trainer__r.Name,
           session_image_url: sample.Session_Photo_URL__c,
           session_date: sample.Date__c,
+          ts_latitude: sample.Location_GPS__Latitude__s,
+          ts_longitude: sample.Location_GPS__Longitude__s,
         })),
         { transaction }
       );

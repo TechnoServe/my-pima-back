@@ -1,9 +1,8 @@
 import { gql } from "apollo-server-express";
 
-
 const TrainingSessionsTypeDefs = gql`
-
   scalar Date
+  scalar Decimal
 
   type TrainingSession {
     ts_id: ID!
@@ -32,7 +31,18 @@ const TrainingSessionsTypeDefs = gql`
   }
 
   type Mutation {
-    validateSession(ts_id: ID!, status: String!): TrainingSessionResponse
+    validateSession(input: [SessionReviewInput!]!): BatchResponse
+  }
+
+  input SessionReviewInput {
+    sessionId: String!
+    status: String!
+    userId: String!
+  }
+
+  type BatchResponse {
+    status: Int
+    message: String
   }
 
   type SampledSession {
@@ -47,6 +57,8 @@ const TrainingSessionsTypeDefs = gql`
     session_image_url: String!
     session_date: Date!
     image_review_result: String
+    ts_latitude: Decimal
+    ts_longitude: Decimal
   }
 
   type AllTrainingSessionsResponse {
