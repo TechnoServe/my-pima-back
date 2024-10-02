@@ -158,7 +158,9 @@ const ParticipantsResolvers = {
         // Data Processing
         console.log("Processing data.................");
         const formattedHHData = formatHHData(fileData);
+        console.log("Done formatting data.................");
         const groupedHHData = await groupDataByHousehold(formattedHHData);
+        console.log("Done grouping data.................");
 
         if (groupedHHData.status == 500) {
           throw groupedHHData;
@@ -380,7 +382,7 @@ const ParticipantsResolvers = {
                     Number_of_Members__c: group.length,
                   };
                 } else {
-                  //console.log("HOUSEHOLD PRIME MISSING", group);
+                  console.log("HOUSEHOLD PRIME MISSING", group);
                   return {
                     message: `Household: ${group[0].Household_Number__c} FFG: ${group[0].ffg_id} does not have a primary member.`,
                     status: 500,
@@ -1291,7 +1293,15 @@ function formatParticipantData(fileData, trainingGroupsMap, recentHHData) {
 }
 
 async function groupDataByHousehold(formattedData) {
+  console.log("grouping data");
   const errors = [];
+  const filteredGroup = formattedData.filter(
+    (item) => item["Household_Number__c"] === 13 && item["ffg_id"] === "BC1USHKBNYAR1512"
+  );
+  
+  console.log("Records for Household_Number__c = 13 and ffg_id = BC1USHKBNYAR1512:", filteredGroup);
+  console.log(`Found ${filteredGroup.length} records for this group.`);
+
   const groupedData = formattedData
     .filter((item) => item !== undefined)
     .reduce((acc, curr) => {
@@ -1305,6 +1315,8 @@ async function groupDataByHousehold(formattedData) {
 
   const households = [];
 
+  console.log("grouped households processing one by one");
+
   Object.values(groupedData).forEach((group) => {
     const primaryMember = group.find(
       (member) => member["Primary_Household_Member__c"] === "Yes"
@@ -1313,26 +1325,38 @@ async function groupDataByHousehold(formattedData) {
       (member) => member["Primary_Household_Member__c"] === "No"
     );
 
-    if (group.length === 2 && secondaryMember === undefined) {
-      errors.push(
-        `Household: ${group[0].Household_Number__c} has the same SF ID in both FFG: ${group[0].ffg_id} and FFG: ${group[1].ffg_id} If one is a new Household please leave the SF Id empty.`
-      );
-      return;
+    group.forEach((member) => {
+      if (!member || member["Household_Number__c"] === undefined) {
+        console.error(
+          "Household_Number__c is undefined for this member in group:",
+          member
+        );
+      }
+    });
+
+
+    if (group.length === 2 && !secondaryMember) {
+      console.log(group, " has a problem");
+      throw {
+        status: 500,
+        message: `Unknown error with ${group[0]?.Household_Number__c} FFG: ${group[0]?.ffg_id}`,
+      };
     }
 
-    if (
-      group.length === 2 &&
-      primaryMember.Household_Number__c !== secondaryMember.Household_Number__c
-    ) {
-      errors.push(
-        `SF Household: ${group[0].Household_Number__c} / FFG ${group[0].ffg_id} has 2 households with different SF Ids.`
-      );
-      return;
+    if (primaryMember && secondaryMember) {
+
+      if (group.length === 2 && primaryMember.Household_Number__c !== secondaryMember.Household_Number__c) {
+        console.log(group);
+        errors.push(
+          `HH Number: ${group[0]?.Household_Number__c} / FFG ${group[0]?.ffg_id} has 2 households with different SF Ids.`
+        );
+        return;
+      }
     }
 
     if (group.length > 2) {
       errors.push(
-        `Household: ${group[0].Household_Number__c} FFG ${group[0].ffg_id} has more than 2 members`
+        `Household: ${group[0]?.Household_Number__c} FFG ${group[0]?.ffg_id} has more than 2 members`
       );
       return;
     }
@@ -1349,6 +1373,8 @@ async function groupDataByHousehold(formattedData) {
       );
     }
   });
+
+  console.log("done with whatever")
 
   if (errors.length > 0) {
     const errorFileBase64 = await createErrorExcelFile(errors);
