@@ -1,6 +1,11 @@
 import logger from "../config/logger.mjs";
 
-export const fetchFarmVisitsFromSalesforce = async (sf_conn, trainerId, lastMonday, lastSunday) => {
+export const fetchFarmVisitsFromSalesforce = async (
+  sf_conn,
+  trainerId,
+  lastMonday,
+  lastSunday
+) => {
   const soqlQuery = `
     SELECT Id, Name, Best_Practice_Adoption__c, Farm_Visit__c,
            Farm_Visit__r.Name, Farm_Visit__r.Training_Group__r.Name,
@@ -62,23 +67,48 @@ export const fetchTrainingGroupsByProjectId = async (sf_conn, project_id) => {
 };
 
 export const fetchFarmVisitsByTrainingGroups = async (sf_conn, tg_ids) => {
-  let farmVisits = [];
-  let result = await sf_conn.query(
-    `SELECT Id, Training_Group__r.Name, Training_Group__r.TNS_Id__c,
-      Farm_Visited__c, Farm_Visited__r.Name, Farm_Visited__r.Last_Name__C, 
-      Farm_Visited__r.TNS_Id__c, Farm_Visited__r.Household__c, 
-      Farm_Visited__r.Household__r.Household_ID__c, Farmer_Trainer__r.Name, Date_Visited__c  
-    FROM Farm_Visit__c 
-    WHERE Training_Group__c IN (${tg_ids.map((id) => `'${id}'`).join(", ")})`
-  );
 
-  farmVisits = farmVisits.concat(result.records);
-
-  while (!result.done) {
-    result = await sf_conn.queryMore(result.nextRecordsUrl);
-    farmVisits = farmVisits.concat(result.records);
+  const batchSize = 200;
+  if (!tg_ids || tg_ids.length === 0) {
+    throw new Error("No Training Group IDs provided");
   }
 
+  let farmVisits = [];
+
+  // Function to query farm visits for a batch of tg_ids
+  const queryFarmVisits = async (batchIds) => {
+    let result = await sf_conn.query(
+      `SELECT Id, Training_Group__r.Name, Training_Group__r.TNS_Id__c,
+        Farm_Visited__c, Farm_Visited__r.Name, Farm_Visited__r.Last_Name__C, 
+        Farm_Visited__r.TNS_Id__c, Farm_Visited__r.Household__c, 
+        Farm_Visited__r.Household__r.Household_ID__c, Farmer_Trainer__r.Name, Date_Visited__c  
+      FROM Farm_Visit__c 
+      WHERE Training_Group__c IN (${batchIds.map((id) => `'${id}'`).join(", ")})`
+    );
+
+    let batchVisits = result.records;
+
+    // Handle pagination if the result is not done (fetch more records if needed)
+    while (!result.done) {
+      result = await sf_conn.queryMore(result.nextRecordsUrl);
+      batchVisits = batchVisits.concat(result.records);
+    }
+
+    return batchVisits;
+  };
+
+  // Split tg_ids into batches and query each batch separately
+  for (let i = 0; i < tg_ids.length; i += batchSize) {
+    const batchIds = tg_ids.slice(i, i + batchSize);
+    try {
+      const batchVisits = await queryFarmVisits(batchIds);
+      farmVisits = farmVisits.concat(batchVisits);
+    } catch (error) {
+      logger.error(`Error fetching farm visits for batch starting at index ${i}:`, error);
+    }
+  }
+
+  // If no visits were found, throw an error
   if (farmVisits.length === 0) {
     throw new Error("Farm Visits not found");
   }
