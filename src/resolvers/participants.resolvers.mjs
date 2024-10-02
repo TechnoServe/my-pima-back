@@ -1159,7 +1159,7 @@ function formatHHData(fileData) {
 
       formattedRow["Household_ID__c"] =
         values[header.indexOf("ffg_id")].replace(/"/g, "") +
-        householdNumber;
+        formattedRow["Name"];
 
       formattedRow["Household_Number__c"] = parseInt(householdNumber); // Store cleaned-up number
 
