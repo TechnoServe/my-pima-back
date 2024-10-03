@@ -158,7 +158,9 @@ const ParticipantsResolvers = {
         // Data Processing
         console.log("Processing data.................");
         const formattedHHData = formatHHData(fileData);
+        console.log("Done formatting data.................");
         const groupedHHData = await groupDataByHousehold(formattedHHData);
+        console.log("Done grouping data.................");
 
         if (groupedHHData.status == 500) {
           throw groupedHHData;
@@ -380,7 +382,7 @@ const ParticipantsResolvers = {
                     Number_of_Members__c: group.length,
                   };
                 } else {
-                  //console.log("HOUSEHOLD PRIME MISSING", group);
+                  console.log("HOUSEHOLD PRIME MISSING", group);
                   return {
                     message: `Household: ${group[0].Household_Number__c} FFG: ${group[0].ffg_id} does not have a primary member.`,
                     status: 500,
@@ -1157,6 +1159,10 @@ function formatHHData(fileData) {
         formattedRow["Name"] = householdNumber;
       }
 
+      formattedRow["Household_ID__c"] =
+        values[header.indexOf("ffg_id")].replace(/"/g, "") +
+        formattedRow["Name"];
+
       formattedRow["Household_Number__c"] = parseInt(householdNumber); // Store cleaned-up number
 
       acc.push(formattedRow);
@@ -1287,7 +1293,15 @@ function formatParticipantData(fileData, trainingGroupsMap, recentHHData) {
 }
 
 async function groupDataByHousehold(formattedData) {
+  console.log("grouping data");
   const errors = [];
+  const filteredGroup = formattedData.filter(
+    (item) => item["Household_Number__c"] === 13 && item["ffg_id"] === "BC1USHKBNYAR1512"
+  );
+  
+  console.log("Records for Household_Number__c = 13 and ffg_id = BC1USHKBNYAR1512:", filteredGroup);
+  console.log(`Found ${filteredGroup.length} records for this group.`);
+
   const groupedData = formattedData
     .filter((item) => item !== undefined)
     .reduce((acc, curr) => {
@@ -1301,6 +1315,8 @@ async function groupDataByHousehold(formattedData) {
 
   const households = [];
 
+  console.log("grouped households processing one by one");
+
   Object.values(groupedData).forEach((group) => {
     const primaryMember = group.find(
       (member) => member["Primary_Household_Member__c"] === "Yes"
@@ -1309,26 +1325,38 @@ async function groupDataByHousehold(formattedData) {
       (member) => member["Primary_Household_Member__c"] === "No"
     );
 
-    if (group.length === 2 && secondaryMember === undefined) {
-      errors.push(
-        `Household: ${group[0].Household_Number__c} has the same SF ID in both FFG: ${group[0].ffg_id} and FFG: ${group[1].ffg_id} If one is a new Household please leave the SF Id empty.`
-      );
-      return;
+    group.forEach((member) => {
+      if (!member || member["Household_Number__c"] === undefined) {
+        console.error(
+          "Household_Number__c is undefined for this member in group:",
+          member
+        );
+      }
+    });
+
+
+    if (group.length === 2 && !secondaryMember) {
+      console.log(group, " has a problem");
+      throw {
+        status: 500,
+        message: `Unknown error with ${group[0]?.Household_Number__c} FFG: ${group[0]?.ffg_id}`,
+      };
     }
 
-    if (
-      group.length === 2 &&
-      primaryMember.Household_Number__c !== secondaryMember.Household_Number__c
-    ) {
-      errors.push(
-        `SF Household: ${group[0].Household_Number__c} / FFG ${group[0].ffg_id} has 2 households with different SF Ids.`
-      );
-      return;
+    if (primaryMember && secondaryMember) {
+
+      if (group.length === 2 && primaryMember.Household_Number__c !== secondaryMember.Household_Number__c) {
+        console.log(group);
+        errors.push(
+          `HH Number: ${group[0]?.Household_Number__c} / FFG ${group[0]?.ffg_id} has 2 households with different SF Ids.`
+        );
+        return;
+      }
     }
 
     if (group.length > 2) {
       errors.push(
-        `Household: ${group[0].Household_Number__c} FFG ${group[0].ffg_id} has more than 2 members`
+        `Household: ${group[0]?.Household_Number__c} FFG ${group[0]?.ffg_id} has more than 2 members`
       );
       return;
     }
@@ -1345,6 +1373,8 @@ async function groupDataByHousehold(formattedData) {
       );
     }
   });
+
+  console.log("done with whatever")
 
   if (errors.length > 0) {
     const errorFileBase64 = await createErrorExcelFile(errors);
@@ -1416,7 +1446,7 @@ async function updateHouseholdsInSalesforce(
 
     const householdQueries = batchedHouseholdNumbers.map((batch) => {
       return sf_conn.query(
-        `SELECT Id, Farm_Size__c, Number_of_Coffee_Plots__c, Household_Number__c, Name, Number_of_Members__c, training_group__c 
+        `SELECT Id, Farm_Size__c, Number_of_Coffee_Plots__c, Household_ID__c, Household_Number__c, Name, Number_of_Members__c, training_group__c 
         FROM Household__c WHERE Id IN ('${batch.join("','")}')`
       );
     });
@@ -1740,7 +1770,8 @@ function didHouseholdValuesChange(sfHousehold, itemToInsert) {
     sfHousehold.Farm_Size__c === farmSize &&
     sfHousehold.Name === itemToInsert.Name &&
     sfHousehold.Number_of_Members__c === itemToInsert.Number_of_Members__c &&
-    sfHousehold.Training_Group__c === itemToInsert.Training_Group__c
+    sfHousehold.Training_Group__c === itemToInsert.Training_Group__c &&
+    sfHousehold.Household_ID__c === itemToInsert.Household_ID__c
   );
 }
 
@@ -1794,7 +1825,8 @@ function didParticipantValuesChange(sfParticipant, itemToInsert) {
     sfParticipant.Household__c === itemToInsert.Household__c &&
     sfParticipant.Status__c === itemToInsert.Status__c &&
     sfParticipant.Gender__c === itemToInsert.Gender__c &&
-    normalize(sfParticipant.Phone_Number__c) === normalize(itemToInsert.Phone_Number__c) &&
+    normalize(sfParticipant.Phone_Number__c) ===
+      normalize(itemToInsert.Phone_Number__c) &&
     //sfParticipant.Number_of_Coffee_Plots__c === numberOfTrees &&
     middleNameComparison && // Include the modified comparison for Middle_Name__c
     lastNameComparison && // Include the modified comparison for Last_Name__c
