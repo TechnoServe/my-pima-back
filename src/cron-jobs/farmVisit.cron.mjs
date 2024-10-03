@@ -5,7 +5,7 @@ import { sampleFarmVisits } from "../services/farmVisitSampler.service.mjs";
 cron.schedule("0 1 * * 1", async () => {
   try {
     console.log("Starting sampling process...");
-    // await sampleFarmVisits();
+    await sampleFarmVisits();
     console.log("Sampling process completed.");
   } catch (error) {
     console.error("Error in sampling process:", error);

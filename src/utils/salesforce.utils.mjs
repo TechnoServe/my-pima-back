@@ -115,3 +115,75 @@ export const fetchFarmVisitsByTrainingGroups = async (sf_conn, tg_ids) => {
 
   return farmVisits;
 };
+
+// Query TS Sessions by project Id
+export const fetchRandomTSByPId = async (
+  sf_conn,
+  ProjectId,
+  sampleSize,
+  lastMonday,
+  lastSunday
+) => {
+  let training_sessions = [];
+
+  // Step 1: Get the total number of records
+  let countResult = await sf_conn.query(
+    `SELECT COUNT() 
+     FROM Training_Session__c 
+     WHERE Training_Group__r.Group_Status__c='Active' 
+     AND Date__c >= ${lastMonday} AND Date__c <= ${lastSunday}
+     AND Date__c != NULL
+     AND Training_Group__r.Project__c = '${ProjectId}'`
+  );
+
+  console.log(sampleSize);
+  console.log(`Last week count: ${countResult.totalSize}`);
+
+  const totalRecords = countResult.totalSize;
+  const fivePercentCount = Math.ceil((totalRecords * sampleSize) / 100);
+
+  if (totalRecords > fivePercentCount) {
+    // Step 3: Generate a random number for OFFSET (ensure it's within the bounds)
+    const randomOffset = Math.floor(
+      Math.random() * (totalRecords - fivePercentCount)
+    );
+
+    // Step 4: Fetch the random subset of records using LIMIT and OFFSET
+    let result = await sf_conn.query(
+      `SELECT Id, Module_Name__c, Training_Module__c, Training_Group__r.Name, Training_Group__r.TNS_Id__c, 
+              Male_Attendance__c, Female_Attendance__c, Trainer__r.Name, 
+              Session_Photo_URL__c, Date__c, Number_in_Attendance__c, Location_GPS__Latitude__s, Location_GPS__Longitude__s,
+              Female_Count_Light_Full__c, Male_Count_Light_Full__c, Total_Count_Light_Full__c
+             FROM Training_Session__c 
+             WHERE Training_Group__r.Group_Status__c='Active' 
+             AND Date__c >= ${lastMonday} AND Date__c <= ${lastSunday}
+             AND Training_Group__r.Project__c = '${ProjectId}' AND Date__c != NULL
+             AND Training_Module__r.Current_Training_Module__c = true
+             ORDER BY Date__c DESC 
+             LIMIT ${fivePercentCount} 
+             OFFSET ${randomOffset}`
+    );
+
+    training_sessions = training_sessions.concat(result.records);
+  } else {
+    // If there are fewer records than 5%, just fetch all
+    let result = await sf_conn.query(
+      `SELECT Id, Module_Name__c, Training_Module__c, Training_Group__r.Name, Training_Group__r.TNS_Id__c, 
+              Male_Attendance__c, Female_Attendance__c, Trainer__r.Name, 
+              Session_Photo_URL__c, Date__c, Number_in_Attendance__c, Location_GPS__Latitude__s, Location_GPS__Longitude__s,
+              Female_Count_Light_Full__c, Male_Count_Light_Full__c, Total_Count_Light_Full__c
+             FROM Training_Session__c 
+             WHERE Training_Group__r.Group_Status__c='Active' 
+             AND Date__c >= ${lastMonday} AND Date__c <= ${lastSunday}
+             AND Training_Group__r.Project__c = '${ProjectId}' AND Date__c != NULL
+             AND Training_Module__r.Current_Training_Module__c = true
+             ORDER BY Date__c DESC `
+    );
+
+    training_sessions = training_sessions.concat(result.records);
+  }
+
+  console.log(`Sampled: ${training_sessions.length}`);
+
+  return training_sessions;
+};

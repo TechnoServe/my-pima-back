@@ -17,9 +17,9 @@ export const ReportGeneratorService = {
     // Add dynamic columns for each best practice
     bestPracticeTypes.forEach((practice) => {
       baseColumns.push({ header: `${practice} - Yes (%)`, key: `${practice}_yes`, width: 15 });
-      // baseColumns.push({ header: `${practice} - No (%)`, key: `${practice}_no`, width: 15 });
-      // baseColumns.push({ header: `${practice} - Unclear (%)`, key: `${practice}_unclear`, width: 15 });
-      // baseColumns.push({ header: `${practice} - Not Reviewed (%)`, key: `${practice}_not_reviewed`, width: 20 });
+      baseColumns.push({ header: `${practice} - No (%)`, key: `${practice}_no`, width: 15 });
+      baseColumns.push({ header: `${practice} - Unclear (%)`, key: `${practice}_unclear`, width: 15 });
+      baseColumns.push({ header: `${practice} - Not Reviewed (%)`, key: `${practice}_not_reviewed`, width: 20 });
     });
 
     worksheet.columns = baseColumns;
@@ -34,9 +34,9 @@ export const ReportGeneratorService = {
       // Add the best practice percentages for each type
       bestPracticeTypes.forEach((practice) => {
         rowData[`${practice}_yes`] = trainerStat.bestPracticeStats[practice].yesPercentage + "%";
-        // rowData[`${practice}_no`] = trainerStat.bestPracticeStats[practice].noPercentage + "%";
-        // rowData[`${practice}_unclear`] = trainerStat.bestPracticeStats[practice].unclearPercentage + "%";
-        // rowData[`${practice}_not_reviewed`] = trainerStat.bestPracticeStats[practice].notReviewedPercentage + "%";
+        rowData[`${practice}_no`] = trainerStat.bestPracticeStats[practice].noPercentage + "%";
+        rowData[`${practice}_unclear`] = trainerStat.bestPracticeStats[practice].unclearPercentage + "%";
+        rowData[`${practice}_not_reviewed`] = trainerStat.bestPracticeStats[practice].notReviewedPercentage + "%";
       });
 
       worksheet.addRow(rowData);

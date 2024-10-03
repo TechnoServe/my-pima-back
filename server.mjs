@@ -45,11 +45,11 @@ import PerformanceResolvers from "./src/resolvers/performance.resolvers.mjs";
 import PerformanceTypeDefs from "./src/typeDefs/performance.typeDefs.mjs";
 import { FarmVisitService } from "./src/services/farmVisit.service.mjs";
 import axios from "axios";
-import { AttendanceService } from "./src/services/attendance.service.mjs";
 import "./src/cron-jobs/attendance.cron.mjs";
 import { ParticipantsService } from "./src/services/participant.service.mjs";
 import logger from "./src/config/logger.mjs";
 import Projects from "./src/models/projects.models.mjs";
+import { TSessionService } from "./src/services/tsessions.service.mjs";
 
 const app = express();
 
@@ -72,11 +72,6 @@ const redis = new Redis({
   retryStrategy: (times) => Math.min(times * 50, 2000), // retry connection if it fails
 });
 
-// // Set up Redis pub-sub for real-time subscriptions (optional)
-// const pubSub = new RedisPubSub({
-//   publisher: redis,
-//   subscriber: redis,
-// });
 
 dotenv.config();
 
@@ -100,6 +95,8 @@ var conn = new jsforce.Connection({
   loginUrl: creds.sf_url,
 });
 
+
+// Make a connection to salesforce
 conn.login(
   creds.username,
   creds.password + creds.securityToken,
@@ -118,30 +115,13 @@ conn.login(
   }
 );
 
-app.get("/api", async (req, res) => {
+app.get("/api/sampling", async (req, res) => {
   await FarmVisitService.sampleFarmVisits(conn);
+  await TSessionService.sampleTSForApprovals(conn);
   res.send("Hello, My PIMA API Service!");
 });
 
-app.get("/api/cron", async (req, res) => {
-  //await AttendanceService.cacheAttendanceData(conn);
-  logger.info("Starting participants caching process...");
-  const projects = await Projects.findAll({
-    where: { project_status: "active" },
-  });
-
-  for (let project of projects) {
-    logger.info("processing project", project);
-    await ParticipantsService.fetchAndCacheParticipants(
-      conn,
-      project.sf_project_id
-    );
-  }
-
-  logger.info("Participants caching completed.");
-  res.send("Data cached successfully!");
-});
-
+// Utility API endpoint to fetch images from Salesforce
 app.get("/image/:formId/:attachmentId", async (req, res) => {
   const { formId, attachmentId } = req.params;
   const commcareApiUrl = `https://www.commcarehq.org/a/tns-proof-of-concept/api/form/attachment/${formId}/${attachmentId}`;
@@ -213,15 +193,6 @@ server
   .start()
   .then(() => {
     server.applyMiddleware({ app });
-
-    // Define a cron job to fetch data from the remote database and update the local database
-    // const fetchDataJob = new cron.CronJob("0 0 */24 * * *", async () => {
-    //   // await loadSFProjects(conn);
-    //   pubSub.publish("dataUpdated", { dataUpdated: true });
-    // });
-
-    // Start the cron job
-    // fetchDataJob.start();
 
     app.listen({ port: PORT }, () => {
       console.log(
