@@ -1,6 +1,7 @@
 import { gql } from "apollo-server-express";
 
 const FarmVisitsTypeDefs = gql`
+  scalar Date
   type FarmVisit {
     fv_id: String!
     fv_name: String!
@@ -52,7 +53,7 @@ const FarmVisitsTypeDefs = gql`
       practiceName: String!
       page: Int!
       pageSize: Int!
-    ): [FarmVisit]
+    ): [FarmVisit2]
     generateFarmVisitReport(projectId: String!): FileExport
   }
 
@@ -68,13 +69,13 @@ const FarmVisitsTypeDefs = gql`
     totalVisits: Int
   }
 
-  type FarmVisit {
+  type FarmVisit2 {
     visit_id: ID!
     sf_visit_id: String
     farmer_name: String
     farmer_pima_id: String
     farmer_tns_id: String
-    date_visited: String
+    date_visited: Date!
     farmer_trainer: String
     BestPractices: [BestPractice]
   }
