@@ -193,26 +193,27 @@ const PerformanceResolvers = {
               aaData.year === ftData.year &&
               aaData.Trainer__c === ftData.Trainer__c
           );
-
-          const difference =
-            correspondingAaData != undefined
-              ? parseInt(
-                  correspondingAaData.avg_attendance_by_aa -
-                    ftData.avg_attendance_by_ft
-                )
-              : parseInt(ftData.avg_attendance_by_ft);
-
+        
+          const ftAttendance = ftData.avg_attendance_by_ft
+            ? parseInt(ftData.avg_attendance_by_ft)
+            : 0;
+        
+          const aaAttendance = correspondingAaData && correspondingAaData.avg_attendance_by_aa
+            ? parseInt(correspondingAaData.avg_attendance_by_aa)
+            : 0;
+        
+          const difference = aaAttendance - ftAttendance;
+        
           return {
             trainerId: ftData.Trainer__c,
             month: getMonthAbbreviation(ftData.month),
             year: ftData.year,
-            difference: difference,
-            ftAttendance: parseInt(ftData.avg_attendance_by_ft),
-            aaAttendance: correspondingAaData
-              ? parseInt(correspondingAaData.avg_attendance_by_aa)
-              : 0,
+            difference: isNaN(difference) ? 0 : difference,  // Ensure difference is valid
+            ftAttendance: isNaN(ftAttendance) ? 0 : ftAttendance,  // Ensure valid number
+            aaAttendance: isNaN(aaAttendance) ? 0 : aaAttendance,  // Ensure valid number
           };
         });
+        
 
         // Organize data by staff ID for trained FFGs
         const staffTrainedFFGsMap = {};

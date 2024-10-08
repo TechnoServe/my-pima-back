@@ -7,7 +7,10 @@ const FarmVisitsResolvers = {
   Query: {
     getFarmVisitsByProject: async (_, { project_id }, { sf_conn }) => {
       try {
-        const farmVisits = await FarmVisitService.getFarmVisitsByProject(sf_conn, project_id);
+        const farmVisits = await FarmVisitService.getFarmVisitsByProject(
+          sf_conn,
+          project_id
+        );
 
         return {
           message: "Farm Visits fetched successfully",
@@ -26,10 +29,14 @@ const FarmVisitsResolvers = {
     generateFarmVisitReport: async (_, { projectId }) => {
       try {
         // Step 1: Fetch the farm visit statistics
-        const trainerStats = await FarmVisitService.getFarmVisitStatisticsByTrainer(projectId);
+        const trainerStats =
+          await FarmVisitService.getFarmVisitStatisticsByTrainer(projectId);
 
         // Step 2: Generate the Excel report as Base64
-        const base64Report = await ReportGeneratorService.generateFarmVisitExcelReport(trainerStats);
+        const base64Report =
+          await ReportGeneratorService.generateFarmVisitExcelReport(
+            trainerStats
+          );
 
         // Step 3: Return the Base64 report
         return {
@@ -493,64 +500,64 @@ const FarmVisitsResolvers = {
       }
     },
 
-    // getFarmVisitsByGroup: async (_, { tg_id }, { sf_conn }) => {
-    //   try {
-    //     // check if training group exists by tg_id
-    //     const training_group = await sf_conn.query(
-    //       `SELECT Id FROM Training_Group__c WHERE Id = '${tg_id}'`
-    //     );
+    getFarmVisitsByGroup: async (_, { tg_id }, { sf_conn }) => {
+      try {
+        // check if training group exists by tg_id
+        const training_group = await sf_conn.query(
+          `SELECT Id FROM Training_Group__c WHERE Id = '${tg_id}'`
+        );
 
-    //     if (training_group.totalSize === 0) {
-    //       return {
-    //         message: "Training Group not found",
-    //         status: 404,
-    //       };
-    //     }
+        if (training_group.totalSize === 0) {
+          return {
+            message: "Training Group not found",
+            status: 404,
+          };
+        }
 
-    //     const farmVisits = await sf_conn.query(
-    //       "SELECT Id, Name, Training_Group__r.Name, Training_Group__r.TNS_Id__c, Training_Session__r.Name, Farm_Visited__r.Name, Household_PIMA_ID__c, Farmer_Trainer__r.Name, Visit_Has_Training__c, Date_Visited__c FROM Farm_Visit__c WHERE Training_Group__c = '" +
-    //         tg_id +
-    //         "'"
-    //     );
+        const farmVisits = await sf_conn.query(
+          "SELECT Id, Name, Training_Group__r.Name, Training_Group__r.TNS_Id__c, Training_Session__r.Name, Farm_Visited__r.Name, Household_PIMA_ID__c, Farmer_Trainer__r.Name, Visit_Has_Training__c, Date_Visited__c FROM Farm_Visit__c WHERE Training_Group__c = '" +
+            tg_id +
+            "'"
+        );
 
-    //     if (farmVisits.totalSize === 0) {
-    //       return {
-    //         message: "Farm Visit not found",
-    //         status: 404,
-    //       };
-    //     }
+        if (farmVisits.totalSize === 0) {
+          return {
+            message: "Farm Visit not found",
+            status: 404,
+          };
+        }
 
-    //     return {
-    //       message: "Farm Visits fetched successfully",
-    //       status: 200,
-    //       farmVisits: farmVisits.records.map(async (fv) => {
-    //         return {
-    //           fv_id: fv.Id,
-    //           fv_name: fv.Name,
-    //           training_group: fv.Training_Group__r.Name,
-    //           training_session: fv.Training_Session__r
-    //             ? fv.Training_Session__r.Name
-    //             : "N/A",
-    //           tns_id: fv.Training_Group__r.TNS_Id__c || "N/A",
-    //           farm_visited: fv.Farm_Visited__r
-    //             ? fv.Farm_Visited__r.Name
-    //             : "N/A",
-    //           household_id: fv.Household_PIMA_ID__c || "N/A",
-    //           farmer_trainer: fv.Farmer_Trainer__r.Name || "N/A",
-    //           has_training: fv.Visit_Has_Training__c || "No",
-    //           date_visited: fv.Date_Visited__c,
-    //         };
-    //       }),
-    //     };
-    //   } catch (error) {
-    //     console.log(error);
+        return {
+          message: "Farm Visits fetched successfully",
+          status: 200,
+          farmVisits: farmVisits.records.map(async (fv) => {
+            return {
+              fv_id: fv.Id,
+              fv_name: fv.Name,
+              training_group: fv.Training_Group__r.Name,
+              training_session: fv.Training_Session__r
+                ? fv.Training_Session__r.Name
+                : "N/A",
+              tns_id: fv.Training_Group__r.TNS_Id__c || "N/A",
+              farm_visited: fv.Farm_Visited__r
+                ? fv.Farm_Visited__r.Name
+                : "N/A",
+              household_id: fv.Household_PIMA_ID__c || "N/A",
+              farmer_trainer: fv.Farmer_Trainer__r.Name || "N/A",
+              has_training: fv.Visit_Has_Training__c || "No",
+              date_visited: fv.Date_Visited__c,
+            };
+          }),
+        };
+      } catch (error) {
+        console.log(error);
 
-    //     return {
-    //       message: error.message,
-    //       status: error.status,
-    //     };
-    //   }
-    // },
+        return {
+          message: error.message,
+          status: error.status,
+        };
+      }
+    },
 
     // getFarmVisitsBySession: async (_, { ts_id }, { sf_conn }) => {
     //   try {

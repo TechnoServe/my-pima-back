@@ -56,11 +56,11 @@ const PerformanceTypeDefs = gql`
   }
 
   type AttDifference {
-    month: String!
-    year: String!
-    difference: Int!
-    ftAttendance: Float!
-    aaAttendance: Float!
+    month: String
+    year: String
+    difference: String
+    ftAttendance: Float
+    aaAttendance: Float
   }
 
   type ObservationData {

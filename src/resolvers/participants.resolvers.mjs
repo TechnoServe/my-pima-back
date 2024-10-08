@@ -26,113 +26,18 @@ const ParticipantsResolvers = {
 
     getParticipantsByGroup: async (_, { tg_id }, { sf_conn }) => {
       try {
-        // check if training group exists by tg_id
-        const training_group = await sf_conn.query(
-          `SELECT Id FROM Training_Group__c WHERE Id = '${tg_id}'`
+
+        const result = await ParticipantsService.fetchTGParticipants(
+          sf_conn,
+          tg_id
         );
-
-        if (training_group.totalSize === 0) {
-          return {
-            message: "Training Group not found",
-            status: 404,
-          };
-        }
-
-        const participants = await sf_conn.query(
-          "SELECT Id, Participant_Full_Name__c, Gender__c, Location__c, TNS_Id__c, Status__c, Trainer_Name__c, Project__c, Training_Group__c, Training_Group__r.Responsible_Staff__r.ReportsToId, Household__c, Primary_Household_Member__c FROM Participant__c WHERE Training_Group__c = '" +
-            tg_id +
-            "'"
-        );
-
-        if (participants.totalSize === 0) {
-          return {
-            message: "Participants not found",
-            status: 404,
-          };
-        }
-
-        const res1 = await sf_conn.query(
-          `SELECT Id, Location__r.Name FROM Project_Location__c`,
-          async function (err, result) {
-            if (err) {
-              console.error(err);
-
-              return {
-                message: err.message,
-                status: 500,
-              };
-            }
-
-            return result;
-          }
-        );
-
-        const reportsTo = await sf_conn.query(
-          `SELECT Id, Name FROM Contact`,
-          async function (err, result) {
-            if (err) {
-              console.error(err);
-
-              return {
-                message: err.message,
-                status: 500,
-              };
-            }
-
-            return result;
-          }
-        );
-
+        return result; 
+      } catch (err) {
+        console.error(err);
         return {
-          message: "Participants fetched successfully",
-          status: 200,
-          participants: participants.records.map(async (participant) => {
-            return {
-              p_id: participant.Id,
-              full_name: participant.Participant_Full_Name__c,
-              gender: participant.Gender__c,
-              location:
-                res1.records.find(
-                  (location) =>
-                    location.Id ===
-                    participant.Training_Group__r.Project_Location__c
-                ) === undefined
-                  ? "N/A"
-                  : res1.records.find(
-                      (location) =>
-                        location.Id ===
-                        participant.Training_Group__r.Project_Location__c
-                    ).Location__r.Name,
-              tns_id: participant.TNS_Id__c,
-              status: participant.Status__c,
-              farmer_trainer: participant.Trainer_Name__c,
-              business_advisor:
-                reportsTo.records.find(
-                  (contact) =>
-                    contact.Id ===
-                    participant.Training_Group__r.Responsible_Staff__r
-                      .ReportsToId
-                ) === undefined
-                  ? null
-                  : reportsTo.records.find(
-                      (contact) =>
-                        contact.Id ===
-                        participant.Training_Group__r.Responsible_Staff__r
-                          .ReportsToId
-                    ).Name,
-              project_name: participant.Project__c,
-              training_group: participant.Training_Group__c,
-              household_id: participant.Household__c,
-              primary_household_member: participant.Primary_Household_Member__c,
-            };
-          }),
-        };
-      } catch (error) {
-        console.log(error);
-
-        return {
-          message: error.message,
-          status: error.status,
+          message: "An error occurred while fetching participants",
+          status: 500,
+          participants: [],
         };
       }
     },
@@ -1369,7 +1274,7 @@ async function groupDataByHousehold(formattedData) {
     } else {
       console.log(group);
       errors.push(
-        `Household: ${group[0].Household_Number__c} FFG: ${group[0].ffg_id} does not have a primary member.`
+        `Household Number: ${group[0].Household_Number__c} with SF ID: ${group[0].Household__c} in FFG: ${group[0].ffg_id} does not have a primary member.`
       );
     }
   });
