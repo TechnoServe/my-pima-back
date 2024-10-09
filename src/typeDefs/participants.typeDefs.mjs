@@ -31,12 +31,19 @@ const ParticipantsTypeDefs = gql`
   type Query {
     getParticipantsByProject(project_id: String!): AllParticipantsResponse
     getParticipantsByGroup(tg_id: String!): AllParticipantsResponse
+    getParticipantsById(p_id: String!): SingleParticipantResponse
   }
 
   type Mutation {
     uploadParticipants(parts_file: Upload!): UploadResponse
     uploadParticipant(parts_file: Upload!): UploadResponse
     syncParticipantsWithCOMMCARE(project_id: String!): UploadResponse
+  }
+
+  type SingleParticipantResponse {
+    message: String!
+    status: Int!
+    participant: Participant
   }
 
   type AllParticipantsResponse {

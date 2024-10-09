@@ -26,12 +26,28 @@ const ParticipantsResolvers = {
 
     getParticipantsByGroup: async (_, { tg_id }, { sf_conn }) => {
       try {
-
         const result = await ParticipantsService.fetchTGParticipants(
           sf_conn,
           tg_id
         );
-        return result; 
+        return result;
+      } catch (err) {
+        console.error(err);
+        return {
+          message: "An error occurred while fetching participants",
+          status: 500,
+          participants: [],
+        };
+      }
+    },
+
+    getParticipantsById: async (_, { p_id }, { sf_conn }) => {
+      try {
+        const result = await ParticipantsService.fetchParticipant(
+          sf_conn,
+          p_id
+        );
+        return result;
       } catch (err) {
         console.error(err);
         return {
@@ -1201,10 +1217,15 @@ async function groupDataByHousehold(formattedData) {
   console.log("grouping data");
   const errors = [];
   const filteredGroup = formattedData.filter(
-    (item) => item["Household_Number__c"] === 13 && item["ffg_id"] === "BC1USHKBNYAR1512"
+    (item) =>
+      item["Household_Number__c"] === 13 &&
+      item["ffg_id"] === "BC1USHKBNYAR1512"
   );
-  
-  console.log("Records for Household_Number__c = 13 and ffg_id = BC1USHKBNYAR1512:", filteredGroup);
+
+  console.log(
+    "Records for Household_Number__c = 13 and ffg_id = BC1USHKBNYAR1512:",
+    filteredGroup
+  );
   console.log(`Found ${filteredGroup.length} records for this group.`);
 
   const groupedData = formattedData
@@ -1239,7 +1260,6 @@ async function groupDataByHousehold(formattedData) {
       }
     });
 
-
     if (group.length === 2 && !secondaryMember) {
       console.log(group, " has a problem");
       throw {
@@ -1249,8 +1269,11 @@ async function groupDataByHousehold(formattedData) {
     }
 
     if (primaryMember && secondaryMember) {
-
-      if (group.length === 2 && primaryMember.Household_Number__c !== secondaryMember.Household_Number__c) {
+      if (
+        group.length === 2 &&
+        primaryMember.Household_Number__c !==
+          secondaryMember.Household_Number__c
+      ) {
         console.log(group);
         errors.push(
           `HH Number: ${group[0]?.Household_Number__c} / FFG ${group[0]?.ffg_id} has 2 households with different SF Ids.`
@@ -1279,7 +1302,7 @@ async function groupDataByHousehold(formattedData) {
     }
   });
 
-  console.log("done with whatever")
+  console.log("done with whatever");
 
   if (errors.length > 0) {
     const errorFileBase64 = await createErrorExcelFile(errors);
