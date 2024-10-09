@@ -47,7 +47,7 @@ const AttendanceResolvers = {
     getAttendanceByParticipant: async (_, { participant_id }, { sf_conn }) => {
       try {
         const attendance = await sf_conn.query(
-          "SELECT Id, Name, Participant__c, Participant_Gender__c, Attended__c, Training_Session__c, Date__c FROM Attendance__c WHERE Participant__c = '" +
+          "SELECT Id, Name, Participant__c, Participant_Gender__c,Training_Session__r.Training_Module__r.Module_Title__c, Attended__c, Training_Session__c, Date__c FROM Attendance__c WHERE Participant__c = '" +
             participant_id +
             "'"
         );
@@ -67,6 +67,9 @@ const AttendanceResolvers = {
               attendance_id: attendance.Id,
               attendance_name: attendance.Name,
               participant_id: attendance.Participant__c,
+              module_name:
+                attendance.Training_Session__r.Training_Module__r
+                  .Module_Title__c,
               attendance_date: attendance.Date__c,
               attendance_status:
                 attendance.Attended__c === 1 ? "Present" : "Absent",

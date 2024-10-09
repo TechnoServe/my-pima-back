@@ -5,7 +5,7 @@ const AttendanceTypeDefs = gql`
     attendance_id: String!
     participant_id: String!
     attendance_name: String!
-    module_name: String!
+    module_name: String
     module_number: String!
     attendance_date: String
     attendance_status: String!
