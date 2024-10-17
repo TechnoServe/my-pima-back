@@ -50,6 +50,8 @@ import { ParticipantsService } from "./src/services/participant.service.mjs";
 import logger from "./src/config/logger.mjs";
 import Projects from "./src/models/projects.models.mjs";
 import { TSessionService } from "./src/services/tsessions.service.mjs";
+import heicConvert from "heic-convert";
+import fileType from "file-type"; 
 
 const app = express();
 
@@ -72,7 +74,6 @@ const redis = new Redis({
   retryStrategy: (times) => Math.min(times * 50, 2000), // retry connection if it fails
 });
 
-
 dotenv.config();
 
 const PORT = process.env.PORT || 6500;
@@ -94,7 +95,6 @@ var conn = new jsforce.Connection({
   // you can change loginUrl to connect to sandbox or prerelease env.
   loginUrl: creds.sf_url,
 });
-
 
 // Make a connection to salesforce
 conn.login(
@@ -126,8 +126,10 @@ app.get("/image/:formId/:attachmentId", async (req, res) => {
   const { formId, attachmentId } = req.params;
   const commcareApiUrl = `https://www.commcarehq.org/a/tns-proof-of-concept/api/form/attachment/${formId}/${attachmentId}`;
 
-  console.log(`requesting image on this url ${commcareApiUrl}`);
+  console.log(`Requesting image from: ${commcareApiUrl}`);
+
   try {
+    // Fetch the image from CommCare API
     const response = await axios.get(commcareApiUrl, {
       headers: {
         Authorization: `ApiKey ymugenga@tns.org:46fa5358cd802aabcc5c3b14a194464d40c564e6`,
@@ -135,9 +137,33 @@ app.get("/image/:formId/:attachmentId", async (req, res) => {
       responseType: "arraybuffer", // Handle binary data (e.g., images)
     });
 
-    // Set the appropriate headers and send the image back
-    res.set("Content-Type", "image/jpeg");
-    res.send(response.data);
+    const resBuffer = Buffer.from(response.data, "binary"); // Convert response data to Buffer
+
+    // Check if the image is in HEIC format or detect the type
+    const detectedType = await fileType.fromBuffer(resBuffer);
+    console.log(
+      `Detected MIME type: ${detectedType ? detectedType.mime : "unknown"}`
+    );
+    if (detectedType && detectedType.mime === "image/heic") {
+      // Convert HEIC to JPEG (or PNG if needed)
+      const outputBuffer = await heicConvert({
+        buffer: resBuffer, // The HEIC buffer
+        format: "JPEG", // Convert to JPEG or PNG
+        quality: 0.1, // Quality setting (0 to 1)
+      });
+
+      // Set headers and send the converted image as JPEG
+      res.set("Content-Type", "image/jpeg");
+      res.send(outputBuffer);
+    } else if (detectedType && detectedType.mime) {
+      // For other image formats, set the detected MIME type and send the image
+      res.set("Content-Type", detectedType.mime);
+      res.send(resBuffer);
+    } else {
+      // Fallback: Set the default Content-Type if MIME type is not detected
+      res.set("Content-Type", "application/octet-stream");
+      res.send(resBuffer);
+    }
   } catch (error) {
     console.error("Error fetching the image:", error);
     res.status(500).send("Error fetching the image");

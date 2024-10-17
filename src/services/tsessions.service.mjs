@@ -62,6 +62,39 @@ export const TSessionService = {
       sf_project_id: sf_project_id,
     });
   },
+
+  async getStatsByFT(projectId, startDate, endDate, status) {
+    const whereConditions = {
+      sf_project_id: projectId,
+    };
+
+    // Handle different date filtering cases
+    if (startDate && endDate) {
+      // Both startDate and endDate are provided
+      whereConditions.session_date = {
+        [Op.between]: [startDate, endDate],
+      };
+    } else if (startDate) {
+      // Only startDate is provided
+      whereConditions.session_date = {
+        [Op.gte]: startDate,
+      };
+    } else if (endDate) {
+      // Only endDate is provided
+      whereConditions.session_date = {
+        [Op.lte]: endDate,
+      };
+    }
+
+    // Add status filter only if a status is provided
+    if (status && status !== "all") {
+      whereConditions.image_review_result;
+    }
+
+    console.log(whereConditions);
+
+    return await TsSampleRepository.findAll(whereConditions);
+  },
 };
 
 const saveTrainingSessions = async (sessions, sf_project_id) => {
@@ -81,9 +114,15 @@ const saveTrainingSessions = async (sessions, sf_project_id) => {
           training_module_name: sample.Module_Name__c,
           tg_name: sample.Training_Group__r.Name,
           tg_tns_id: sample.Training_Group__r.TNS_Id__c,
-          total_attendance: sample.Male_Attendance__c ? sample.Number_in_Attendance__c : sample.Total_Count_Light_Full__c,
-          male_attendance: sample.Male_Attendance__c ? sample.Male_Attendance__c : sample.Male_Count_Light_Full__c,
-          female_attendance: sample.Female_Attendance__c ? sample.Female_Attendance__c: sample.Female_Count_Light_Full__c,
+          total_attendance: sample.Male_Attendance__c
+            ? sample.Number_in_Attendance__c
+            : sample.Total_Count_Light_Full__c,
+          male_attendance: sample.Male_Attendance__c
+            ? sample.Male_Attendance__c
+            : sample.Male_Count_Light_Full__c,
+          female_attendance: sample.Female_Attendance__c
+            ? sample.Female_Attendance__c
+            : sample.Female_Count_Light_Full__c,
           farmer_trainer_name: sample.Trainer__r.Name,
           session_image_url: sample.Session_Photo_URL__c,
           session_date: sample.Date__c,

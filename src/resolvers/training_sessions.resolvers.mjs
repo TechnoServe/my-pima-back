@@ -2,6 +2,7 @@ import Projects from "../models/projects.models.mjs";
 import { TsSampleRepository } from "../repositories/ts_sample.repository.mjs";
 import { TSessionService } from "../services/tsessions.service.mjs";
 import fetchImage from "../utils/commCareApi.mjs";
+import { ReportGeneratorService } from "../services/excel.service.mjs";
 
 const TrainingSessionsResolvers = {
   Query: {
@@ -187,15 +188,48 @@ const TrainingSessionsResolvers = {
     sampledTrainingSessions: async (_, { sf_project_id }) => {
       return TSessionService.getSampledSessions(sf_project_id);
     },
+
+    generateTSApprovalReport: async (
+      _,
+      { projectId, startDate, endDate, status }
+    ) => {
+      try {
+        // Step 1: Fetch the farm visit statistics
+        const sampledRecords = await TSessionService.getStatsByFT(
+          projectId,
+          startDate,
+          endDate,
+          status
+        );
+
+        // Step 2: Generate the Excel report as Base64
+        const base64Report =
+          await ReportGeneratorService.generateSampledTSReport(sampledRecords);
+        // Step 3: Return the Base64 report
+        return {
+          message: "TS report generated successfully",
+          status: 200,
+          file: `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64Report}`,
+        };
+      } catch (err) {
+        console.error("Error generating TS report:", err);
+        return {
+          message: "Failed to generate TS report",
+          status: 500,
+        };
+      }
+    },
   },
 
   Mutation: {
     validateSession: async (_, { input }) => {
-
       try {
         // Use bulkUpdate from the repository for each input
         const updates = input.map((item) => ({
-          values: { image_review_result: item.status, last_reviewed_by: item.userId }, // Fields to update
+          values: {
+            image_review_result: item.status,
+            last_reviewed_by: item.userId,
+          }, // Fields to update
           where: { id: item.sessionId }, // Where condition using tsId
         }));
 

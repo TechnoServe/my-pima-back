@@ -1,28 +1,44 @@
 import axios from "axios";
+import heicConvert from 'heic-convert';
 
 const fetchImage = async (url) => {
   if (!url) return null;
 
   try {
-    console.log("fetchung image")
-    // fetch from url with authorization
+    // Fetch the image from the URL with authorization
     const response = await axios.get(url, {
       headers: {
         Authorization: `ApiKey ${process.env.COMMCARE_API_KEY}`,
       },
-      responseType: "arraybuffer",
+      responseType: 'arraybuffer', // Fetch as binary data
     });
 
-    const resText = await response.data;
+    const resBuffer = Buffer.from(response.data, 'binary'); // Create a Buffer from the response
 
-    // encode the response to base64
-    const base64encodedData = base64encode(resText);
+    // Check if the image is in HEIC format
+    const isHEIC = response.headers['content-type'] === 'image/heic';
 
-    // Send the base64 data to the frontend
-    return `data:image/png;base64,${base64encodedData}`;
+    let base64encodedData;
+
+    if (isHEIC) {
+      // Convert HEIC to JPEG (you can also choose PNG)
+      const outputBuffer = await heicConvert({
+        buffer: resBuffer, // Pass the buffer of the image
+        format: 'JPEG', // Convert to JPEG or PNG
+        quality: 1, // Quality from 0 (worst) to 1 (best)
+      });
+
+      // Convert the Buffer to base64
+      base64encodedData = outputBuffer.toString('base64');
+    } else {
+      // Handle non-HEIC images (e.g., PNG, JPEG)
+      base64encodedData = resBuffer.toString('base64');
+    }
+
+    // Return the base64 data with appropriate format
+    return `data:image/jpeg;base64,${base64encodedData}`; // You can change to PNG if needed
   } catch (error) {
-    console.log(error);
-    console.log("error fetching imges")
+    console.error('Error fetching image:', error);
     return null;
   }
 };

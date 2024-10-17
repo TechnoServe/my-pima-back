@@ -28,6 +28,7 @@ const TrainingSessionsTypeDefs = gql`
     trainingSessionsByGroup(tg_id: String!): AllTrainingSessionsResponse
     trainingSessionImage(ts_id: ID!): TrainingSessionImageResponse
     sampledTrainingSessions(sf_project_id: String!): [SampledSession]
+    generateTSApprovalReport(projectId: String!, startDate: String, endDate: String, status: String): FileExport
   }
 
   type Mutation {
