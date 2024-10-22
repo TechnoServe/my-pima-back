@@ -1,13 +1,22 @@
 import cron from "node-cron";
-import { sampleFarmVisits } from "../services/farmVisitSampler.service.mjs";
+import { FarmVisitService } from "../services/farmVisit.service.mjs";
 
-// Schedule cron job to run every Monday at 1 AM
 cron.schedule("0 1 * * 1", async () => {
   try {
     console.log("Starting sampling process...");
-    await sampleFarmVisits();
+    await FarmVisitService.sampleFarmVisits();
     console.log("Sampling process completed.");
   } catch (error) {
     console.error("Error in sampling process:", error);
+  }
+});
+
+cron.schedule("1 10 * * 1", async () => {
+  try {
+    logger.info("Sending FV reminder email");
+    await FarmVisitService.sendRemainderEmail(conn);
+    logger.info("Email sent");
+  } catch (error) {
+    logger.error("Error in sending email:", error);
   }
 });

@@ -2,8 +2,7 @@ import cron from "node-cron";
 import { AttendanceService } from "../services/attendance.service.mjs";
 import { conn } from "../../server.mjs";
 import logger from "../config/logger.mjs";
-import { ParticipantsService } from "../services/participant.service.mjs";
-import Projects from "../models/projects.models.mjs";
+import { TSessionService } from "../services/tsessions.service.mjs";
 
 // Schedule cron job to run every hour
 cron.schedule("0 * * * *", async () => {
@@ -16,24 +15,24 @@ cron.schedule("0 * * * *", async () => {
   }
 });
 
-// Schedule to fetch participants every hour
-// cron.schedule("0 * * * *", async () => {
-//   try {
-//     logger.info("Starting participants caching process...");
-//     const projects = await Projects.findAll({
-//       where: { project_status: "active" },
-//     });
+// Schedule Attendance Sampling process
+cron.schedule("0 2 * * 1", async () => {
+  try {
+    logger.info("Starting Training Session Sampling process...");
+    await TSessionService.sampleTSForApprovals(conn);
+    logger.info("Sampling process completed.");
+  } catch (error) {
+    logger.error("Error in TS sampling process:", error);
+  }
+});
 
-//     for (let project of projects) {
-//       logger.info("processing project", project);
-//       await ParticipantsService.fetchAndCacheParticipants(
-//         conn,
-//         project.sf_project_id
-//       );
-//     }
 
-//     logger.info("Participants caching completed.");
-//   } catch (error) {
-//     logger.info("Error in participants caching process:", error);
-//   }
-// });
+cron.schedule("0 10 * * 1", async () => {
+  try {
+    logger.info("Sending TS reminder email");
+    await TSessionService.sendRemainderEmail(conn);
+    logger.info("Email sent");
+  } catch (error) {
+    logger.error("Error in sending email:", error);
+  }
+});

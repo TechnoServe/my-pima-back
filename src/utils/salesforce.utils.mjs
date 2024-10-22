@@ -40,6 +40,32 @@ export const fetchFarmVisitsFromSalesforce = async (
   }
 };
 
+export const fetchRandomTSByFt = async (
+  sf_conn,
+  projectId,
+  ftId,
+  lastMonday,
+  lastSunday,
+  limit
+) => {
+  const result = await sf_conn.query(
+    `SELECT Id, Module_Name__c, Training_Module__c, Training_Group__r.Name, Training_Group__r.TNS_Id__c, 
+            Male_Attendance__c, Female_Attendance__c, Trainer__r.Name, 
+            Session_Photo_URL__c, Date__c, Number_in_Attendance__c, Location_GPS__Latitude__s, Location_GPS__Longitude__s,
+            Female_Count_Light_Full__c, Male_Count_Light_Full__c, Total_Count_Light_Full__c
+           FROM Training_Session__c 
+           WHERE Training_Group__r.Group_Status__c='Active' 
+           AND Date__c >= ${lastMonday} AND Date__c <= ${lastSunday}
+           AND Training_Group__r.Project__c = '${projectId}' AND Date__c != NULL
+           AND Training_Module__r.Current_Training_Module__c = true
+           AND Trainer__r.Id = '${ftId}'
+           ORDER BY Date__c DESC 
+           LIMIT ${limit}`
+  );
+
+  return result.records;
+};
+
 export const fetchFTsFromSalesforceByPId = async (sf_conn, projectId) => {
   try {
     const farmerTrainers = await sf_conn.query(`
@@ -67,7 +93,6 @@ export const fetchTrainingGroupsByProjectId = async (sf_conn, project_id) => {
 };
 
 export const fetchFarmVisitsByTrainingGroups = async (sf_conn, tg_ids) => {
-
   const batchSize = 200;
   if (!tg_ids || tg_ids.length === 0) {
     throw new Error("No Training Group IDs provided");
@@ -83,7 +108,9 @@ export const fetchFarmVisitsByTrainingGroups = async (sf_conn, tg_ids) => {
         Farm_Visited__r.TNS_Id__c, Farm_Visited__r.Household__c, 
         Farm_Visited__r.Household__r.Household_ID__c, Farmer_Trainer__r.Name, Date_Visited__c  
       FROM Farm_Visit__c 
-      WHERE Training_Group__c IN (${batchIds.map((id) => `'${id}'`).join(", ")})`
+      WHERE Training_Group__c IN (${batchIds
+        .map((id) => `'${id}'`)
+        .join(", ")})`
     );
 
     let batchVisits = result.records;
@@ -104,7 +131,10 @@ export const fetchFarmVisitsByTrainingGroups = async (sf_conn, tg_ids) => {
       const batchVisits = await queryFarmVisits(batchIds);
       farmVisits = farmVisits.concat(batchVisits);
     } catch (error) {
-      logger.error(`Error fetching farm visits for batch starting at index ${i}:`, error);
+      logger.error(
+        `Error fetching farm visits for batch starting at index ${i}:`,
+        error
+      );
     }
   }
 

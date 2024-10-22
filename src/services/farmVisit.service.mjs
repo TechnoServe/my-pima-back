@@ -12,6 +12,12 @@ import moment from "moment";
 import { Op } from "sequelize";
 import BestPractice from "../models/best_practice.model.mjs";
 import FarmVisit from "../models/farm_visit.model.mjs";
+import Projects from "../models/projects.models.mjs";
+import ProjectRole from "../models/project_role.model.mjs";
+import { MailService } from "./mail.service.mjs";
+import Users from "../models/users.model.mjs";
+import Roles from "../models/roles.model.mjs";
+import { getWeekRange } from "../utils/date.utils.mjs";
 
 const BATCH_SIZE = 100;
 
@@ -432,6 +438,67 @@ export const FarmVisitService = {
         message: "Failed to submit batch.",
       };
     }
+  },
+
+  async sendRemainderEmail() {
+    const approverRole = await Roles.findOne({ role_name: "mel_analyst" }); // Approver needs to be a MEL analyst
+
+    console.log(approverRole.role_id);
+
+    const lastMonday = getWeekRange(1).startOfWeek;
+    const lastSunday = getWeekRange(1).endOfWeek;
+
+    const users = await Users.findAll({
+      where: { role_id: approverRole.role_id },
+    });
+
+    console.log(`Got ${users.length} Users`);
+
+    await Promise.all(
+      users.map(async (user) => {
+        // Define data to be sent in the email
+        const samplingReport = {
+          sampling_start_date: lastMonday,
+          sampling_end_date: lastSunday,
+          projects: [],
+          review_link: "https://pima.ink/in/farmvisit/verification",
+        };
+
+        const userProjects = [];
+
+        const project_roles = await ProjectRole.findAll({
+          where: { user_id: user.user_id, role: approverRole.role_id },
+        });
+
+        await Promise.all(
+          project_roles.map(async (projectRole) => {
+            const project = await Projects.findByPk(projectRole.project_id);
+
+            const totalSampled = await FarmVisitRepository.count({
+              sf_project_id: project.sf_project_id
+            });
+
+            const remaining = await FarmVisitRepository.count({
+              sf_project_id: project.sf_project_id,
+              overall_status: "Not Reviewed",
+            });
+
+            if (remaining > 0) {
+              userProjects.push({
+                name: project.project_name,
+                total_sampled_records: totalSampled,
+                total_reviewed_records: totalSampled - remaining,
+                remaining_records: remaining,
+                id: project.sf_project_id,
+              });
+            }
+          })
+        );
+
+        samplingReport.projects = samplingReport.projects.concat(userProjects);
+        MailService.sendFVReviewReminder(user.user_email, samplingReport);
+      })
+    );
   },
 };
 

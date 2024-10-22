@@ -46,12 +46,13 @@ import PerformanceTypeDefs from "./src/typeDefs/performance.typeDefs.mjs";
 import { FarmVisitService } from "./src/services/farmVisit.service.mjs";
 import axios from "axios";
 import "./src/cron-jobs/attendance.cron.mjs";
+import "./src/cron-jobs/farmVisit.cron.mjs";
 import { ParticipantsService } from "./src/services/participant.service.mjs";
 import logger from "./src/config/logger.mjs";
 import Projects from "./src/models/projects.models.mjs";
 import { TSessionService } from "./src/services/tsessions.service.mjs";
 import heicConvert from "heic-convert";
-import fileType from "file-type"; 
+import fileType from "file-type";
 
 const app = express();
 
@@ -119,6 +120,12 @@ app.get("/api/sampling", async (req, res) => {
   await FarmVisitService.sampleFarmVisits(conn);
   await TSessionService.sampleTSForApprovals(conn);
   res.send("Hello, My PIMA API Service!");
+});
+
+app.get("/api/mail", async (req, res) => {
+  await FarmVisitService.sendRemainderEmail();
+  await TSessionService.sendRemainderEmail();
+  res.send("Done sending mails");
 });
 
 // Utility API endpoint to fetch images from Salesforce
