@@ -23,7 +23,8 @@ export const fetchFarmVisitsFromSalesforce = async (
            planted_intercrop_bananas__c, photograph_intercrop_bananas__c, Intercrop_Bananas_Photo_Status__c,
            do_you_have_a_record_book__c, are_there_records_on_the_record_book__c,
            take_a_photo_of_the_record_book__c, Record_Book_Photo_Status__c,
-           Do_you_have_compost_manure__c, photo_of_the_compost_manure__c, Compost_Manure_Photo_Status__c
+           Do_you_have_compost_manure__c, photo_of_the_compost_manure__c, Compost_Manure_Photo_Status__c, 
+           stumping_method_on_majority_of_trees__c
     FROM FV_Best_Practices__c
     WHERE Farm_Visit__r.Date_Visited__c >= ${lastMonday} AND Farm_Visit__r.Date_Visited__c <= ${lastSunday}
     AND Farm_Visit__r.Farmer_Trainer__c = '${trainerId}'

@@ -71,7 +71,7 @@ const bpFieldMapping = [
     practiceName: "Stumping",
     fields: [
       {
-        field: "how_many_weeds_under_canopy_and_how_big__c",
+        field: "stumping_method_on_majority_of_trees__c",
         fieldLabel:
           "Has the farmer stumped any coffee trees in the field visited since training started?",
         imageField: "photos_of_stumped_coffee_trees__c",
@@ -475,7 +475,7 @@ export const FarmVisitService = {
             const project = await Projects.findByPk(projectRole.project_id);
 
             const totalSampled = await FarmVisitRepository.count({
-              sf_project_id: project.sf_project_id
+              sf_project_id: project.sf_project_id,
             });
 
             const remaining = await FarmVisitRepository.count({
@@ -587,24 +587,54 @@ const sampleVisitsForTrainer = async (project, farmVisits) => {
 const getProjectsToSample = async () => {
   // Implement the logic to get projects from Salesforce or another source
   return [
-    // {
-    //   sf_project_id: "a0E7S0000009aIAUAY",
-    //   sampleAll: true,
-    //   sampleSize: null,
-    //   project_country: "Zimbambwe",
-    // },
-    // {
-    //   sf_project_id: "a0E1o00000krP5jEAE",
-    //   sampleAll: true,
-    //   sampleSize: null,
-    //   project_country: "Zimbambwe",
-    // },
-    // {
-    //   sf_project_id: "a0E1o00000nM1hfEAC",
-    //   sampleAll: true,
-    //   sampleSize: null,
-    //   project_country: "Zimbambwe",
-    // },
+    {
+      sf_project_id: "a0E9J000000KjhSUAS",
+      project_country: "Ethiopia",
+      sampleSize: 1,
+      sampleAll: false,
+    },
+    {
+      sf_project_id: "a0E9J000000KrqmUAC",
+      project_country: "Ethiopia",
+      sampleSize: 1,
+      sampleAll: false,
+    },
+    {
+      sf_project_id: "a0E9J000000L53sUAC",
+      project_country: "Ethiopia",
+      sampleSize: 1,
+      sampleAll: false,
+    },
+    {
+      sf_project_id: "a0EOj000000wZ5RMAU",
+      project_country: "Ethiopia",
+      sampleSize: 1,
+      sampleAll: false,
+    },
+    {
+      sf_project_id: "a0EOj000000yCr7MAE",
+      project_country: "Ethiopia",
+      sampleSize: 1,
+      sampleAll: false,
+    },
+    {
+      sf_project_id: "a0E7S0000009aIAUAY",
+      sampleAll: true,
+      sampleSize: null,
+      project_country: "Zimbambwe",
+    },
+    {
+      sf_project_id: "a0E1o00000krP5jEAE",
+      sampleAll: true,
+      sampleSize: null,
+      project_country: "Zimbambwe",
+    },
+    {
+      sf_project_id: "a0E1o00000nM1hfEAC",
+      sampleAll: true,
+      sampleSize: null,
+      project_country: "Zimbambwe",
+    },
     {
       sf_project_id: "a0E9J000000NTjpUAG",
       sampleAll: false,
