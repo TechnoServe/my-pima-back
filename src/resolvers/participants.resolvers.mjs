@@ -118,26 +118,26 @@ const ParticipantsResolvers = {
         );
 
         if (partsResult.status == 200) {
-          // console.log("Updating Attendance.................");
-          // const attendance = await updateAttendance(fileData, sf_conn);
+          console.log("Updating Attendance.................");
+          const attendance = await updateAttendance(fileData, sf_conn);
 
-          // File Writing
+          //File Writing
           // const newFilename = await writeUploadedFile(stream, ext);
 
-          // if (attendance.status == 200) {
-          return {
-            message: "Participants uploaded successfully",
-            status: 200,
-            //filename: newFilename,
-          };
-          // } else {
-          //   throw {
-          //     status: attendance.status || 500,
-          //     message:
-          //       attendance.message ||
-          //       "An unkown error occured. Please contact the PIMA team.",
-          //   };
-          // }
+          if (attendance.status == 200) {
+            return {
+              message: "Participants uploaded successfully",
+              status: 200,
+              //filename: newFilename,
+            };
+          } else {
+            throw {
+              status: attendance.status || 500,
+              message:
+                attendance.message ||
+                "An unkown error occured. Please contact the PIMA team.",
+            };
+          }
         } else {
           throw {
             status: partsResult.status || 500,
