@@ -50,7 +50,7 @@ const TrainingSessionsTypeDefs = gql`
     id: String!
     training_module_name: String!
     tg_name: String!
-    tg_tns_id: String!
+    tg_tns_id: String
     total_attendance: Int!
     male_attendance: Int!
     female_attendance: Int!
