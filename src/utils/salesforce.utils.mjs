@@ -59,6 +59,7 @@ export const fetchRandomTSByFt = async (
            AND Date__c >= ${lastMonday} AND Date__c <= ${lastSunday}
            AND Training_Group__r.Project__c = '${projectId}' AND Date__c != NULL
            AND Training_Module__r.Current_Training_Module__c = true
+           AND Session_Photo_URL__c != NULL
            AND Trainer__r.Id = '${ftId}'
            ORDER BY Date__c DESC 
            LIMIT ${limit}`
@@ -164,6 +165,7 @@ export const fetchRandomTSByPId = async (
      WHERE Training_Group__r.Group_Status__c='Active' 
      AND Date__c >= ${lastMonday} AND Date__c <= ${lastSunday}
      AND Date__c != NULL
+     AND Session_Photo_URL__c != NULL
      AND Training_Group__r.Project__c = '${ProjectId}'`
   );
 
@@ -189,6 +191,7 @@ export const fetchRandomTSByPId = async (
              WHERE Training_Group__r.Group_Status__c='Active' 
              AND Date__c >= ${lastMonday} AND Date__c <= ${lastSunday}
              AND Training_Group__r.Project__c = '${ProjectId}' AND Date__c != NULL
+             AND Session_Photo_URL__c != NULL
              AND Training_Module__r.Current_Training_Module__c = true
              ORDER BY Date__c DESC 
              LIMIT ${fivePercentCount} 

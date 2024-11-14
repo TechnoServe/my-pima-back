@@ -34,7 +34,9 @@ export const TSessionService = {
             let sampleSize = 10;
 
             // If Kenya and Ethiopia sample by FTs
-            if (["Ethiopia", "Kenya", "Burundi"].includes(project.project_country)) {
+            if (
+              ["Ethiopia", "Kenya", "Burundi"].includes(project.project_country)
+            ) {
               const farmerTrainers = await fetchFTsFromSalesforceByPId(
                 sf_conn,
                 project.sf_project_id
@@ -114,6 +116,7 @@ export const TSessionService = {
     // Single query
     return await TsSampleRepository.findAll({
       sf_project_id: sf_project_id,
+      session_image_url: { [Op.ne]: null },
     });
   },
 
