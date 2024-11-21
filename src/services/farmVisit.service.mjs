@@ -673,6 +673,6 @@ const processFVResponse = (farmVisits) =>
     farmer_trainer: fv.Farmer_Trainer__r.Name || "N/A",
     has_training: fv.Visit_Has_Training__c || "No",
     date_visited: fv.Date_Visited__c,
-    pima_household_id: fv.Farm_Visited__c,
-    pima_farmer_id: fv.Farm_Visited__r.Household__c,
+    pima_household_id: fv.Farm_Visited__r.Household__c,
+    pima_farmer_id: fv.Farm_Visited__c,
   }));
