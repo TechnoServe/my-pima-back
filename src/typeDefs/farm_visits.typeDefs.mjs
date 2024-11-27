@@ -4,20 +4,21 @@ const FarmVisitsTypeDefs = gql`
   scalar Date
   type FarmVisit {
     fv_id: String!
-    fv_name: String!
+    fv_name: String
     training_group: String!
     training_session: String
     tg_tns_id: String
     farmer_tns_id: String
     household_tns_id: String
     farm_visited: String
-    household_id: String!
+    household_id: String
     farmer_trainer: String!
     has_training: String!
     date_visited: String!
     status: String
     pima_household_id: String
     pima_farmer_id: String
+    gender: String
     qas: [QA]
   }
 

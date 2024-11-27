@@ -675,4 +675,5 @@ const processFVResponse = (farmVisits) =>
     date_visited: fv.Date_Visited__c,
     pima_household_id: fv.Farm_Visited__r.Household__c,
     pima_farmer_id: fv.Farm_Visited__c,
+    gender: fv.Farm_Visited__r.Gender__c
   }));

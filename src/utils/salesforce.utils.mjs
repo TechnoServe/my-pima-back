@@ -107,7 +107,7 @@ export const fetchFarmVisitsByTrainingGroups = async (sf_conn, tg_ids) => {
     let result = await sf_conn.query(
       `SELECT Id, Training_Group__r.Name, Training_Group__r.TNS_Id__c,
         Farm_Visited__c, Farm_Visited__r.Name, Farm_Visited__r.Last_Name__C, 
-        Farm_Visited__r.TNS_Id__c, Farm_Visited__r.Household__c, 
+        Farm_Visited__r.TNS_Id__c, Farm_Visited__r.Household__c, Farm_Visited__r.Gender__c,
         Farm_Visited__r.Household__r.Household_ID__c, Farmer_Trainer__r.Name, Date_Visited__c  
       FROM Farm_Visit__c 
       WHERE Training_Group__c IN (${batchIds
