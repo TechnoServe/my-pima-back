@@ -1117,6 +1117,7 @@ function formatParticipantData(fileData, trainingGroupsMap, recentHHData) {
     farmer_sf_id: "Participant__c",
     national_identification_id: "Other_ID_Number__c",
     coop_membership_number: "Other_ID_Number__c",
+    growers_number: "Other_ID_Number__c",
     number_of_coffee_plots: "Number_of_Coffee_Plots__c",
   };
 
