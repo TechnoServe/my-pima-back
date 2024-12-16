@@ -112,40 +112,41 @@ const ParticipantsResolvers = {
         console.log(formattedPartData.slice(0, 2));
 
         console.log("Updating Participants.................");
-        const partsResult = await updateParticipantsInSalesforce(
-          sf_conn,
-          formattedPartData
-        );
+        // const partsResult = await updateParticipantsInSalesforce(
+        //   sf_conn,
+        //   formattedPartData
+        // );
 
-        if (partsResult.status == 200) {
-          console.log("Updating Attendance.................");
-          const attendance = await updateAttendance(fileData, sf_conn);
+        // if (partsResult.status == 200) {
+        //   console.log("Updating Attendance.................");
+        //   const attendance = await updateAttendance(fileData, sf_conn);
 
-          //File Writing
-          // const newFilename = await writeUploadedFile(stream, ext);
+        //   //File Writing
+        //   // const newFilename = await writeUploadedFile(stream, ext);
 
-          if (attendance.status == 200) {
-            return {
-              message: "Participants uploaded successfully",
-              status: 200,
-              //filename: newFilename,
-            };
-          } else {
-            throw {
-              status: attendance.status || 500,
-              message:
-                attendance.message ||
-                "An unkown error occured. Please contact the PIMA team.",
-            };
-          }
-        } else {
-          throw {
-            status: partsResult.status || 500,
-            message:
-              partsResult.message ||
-              "An unkown error occured. Please contact the PIMA team.",
-          };
-        }
+        //   if (attendance.status == 200) {
+        //     return {
+        //       message: "Participants uploaded successfully",
+        //       status: 200,
+        //       //filename: newFilename,
+        //     };
+        //   } else {
+        //     throw {
+        //       status: attendance.status || 500,
+        //       message:
+        //         attendance.message ||
+        //         "An unkown error occured. Please contact the PIMA team.",
+        //     };
+        //   }
+        // } 
+        // else {
+        //   throw {
+        //     status: partsResult.status || 500,
+        //     message:
+        //       partsResult.message ||
+        //       "An unkown error occured. Please contact the PIMA team.",
+        //   };
+        // }
 
         // console.log("hh result", hhResult);
       } catch (error) {
@@ -1176,17 +1177,11 @@ function formatParticipantData(fileData, trainingGroupsMap, recentHHData) {
         }
 
         let hhNumber = "";
-        if (parseInt(values[header.indexOf("Household_Number__c")], 10) < 10) {
-          // Prepend '0' to formattedRow["Name"]
-          hhNumber =
-            "0" +
-            values[header.indexOf("Household_Number__c")].replace(/"/g, "");
-        } else {
-          hhNumber = values[header.indexOf("Household_Number__c")].replace(
-            /"/g,
-            ""
-          );
-        }
+        // Get the value of Household_Number__c and clean it
+        const rawHHNumber = values[header.indexOf("Household_Number__c")].replace(/"/g, "");
+
+        // Format the value to always have 2 digits
+        hhNumber = String(parseInt(rawHHNumber, 10)).padStart(2, "0");
 
         formattedRow["TNS_Id__c"] =
           values[header.indexOf("ffg_id")].replace(/"/g, "") +
