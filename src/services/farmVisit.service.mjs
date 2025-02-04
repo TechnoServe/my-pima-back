@@ -666,7 +666,7 @@ const processFVResponse = (farmVisits) =>
       : "N/A",
     tg_tns_id: fv.Training_Group__r.TNS_Id__c || "N/A",
     farmer_tns_id: fv.Farm_Visited__r.TNS_Id__c || "N/A",
-    household_tns_id: fv.Farm_Visited__r.Household__r.Household_ID__c || "N/A",
+    household_tns_id: fv.Farm_Visited__r.Household__r ? fv.Farm_Visited__r.Household__r.Household_ID__c || "N/A": 'N/A',
     farm_visited: fv.Farm_Visited__r
       ? fv.Farm_Visited__r.Name + " " + fv.Farm_Visited__r.Last_Name__c
       : "N/A",
