@@ -83,9 +83,6 @@ const ParticipantsResolvers = {
         const groupedHHData = await groupDataByHousehold(formattedHHData);
         console.log("Done grouping data.................");
 
-        throw {
-          
-        }
         if (groupedHHData.status == 500) {
           throw groupedHHData;
         }
