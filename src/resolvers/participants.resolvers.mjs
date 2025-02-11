@@ -83,6 +83,9 @@ const ParticipantsResolvers = {
         const groupedHHData = await groupDataByHousehold(formattedHHData);
         console.log("Done grouping data.................");
 
+        throw {
+          
+        }
         if (groupedHHData.status == 500) {
           throw groupedHHData;
         }
@@ -900,6 +903,8 @@ const updateAttendance = async (fileData, sf_conn) => {
               });
             }
           } else {
+            console.log(trainingGroupsMap);
+            console.log(ffgId);
             const trainingSession = await sf_conn.query(
               `SELECT Id FROM Training_Session__c
                 WHERE Training_Group__c = '${trainingGroupsMap.get(
@@ -1212,17 +1217,6 @@ function formatParticipantData(fileData, trainingGroupsMap, recentHHData) {
 async function groupDataByHousehold(formattedData) {
   console.log("grouping data");
   const errors = [];
-  const filteredGroup = formattedData.filter(
-    (item) =>
-      item["Household_Number__c"] === 13 &&
-      item["ffg_id"] === "BC1USHKBNYAR1512"
-  );
-
-  console.log(
-    "Records for Household_Number__c = 13 and ffg_id = BC1USHKBNYAR1512:",
-    filteredGroup
-  );
-  console.log(`Found ${filteredGroup.length} records for this group.`);
 
   const groupedData = formattedData
     .filter((item) => item !== undefined)
@@ -1241,10 +1235,10 @@ async function groupDataByHousehold(formattedData) {
 
   Object.values(groupedData).forEach((group) => {
     const primaryMember = group.find(
-      (member) => member["Primary_Household_Member__c"] === "Yes"
+      (member) => member["Primary_Household_Member__c"] === "Yes" && member["Status__c"] === "Active"
     );
     const secondaryMember = group.find(
-      (member) => member["Primary_Household_Member__c"] === "No"
+      (member) => member["Primary_Household_Member__c"] === "No" && member["Status__c"] === "Active"
     );
 
     group.forEach((member) => {
@@ -1257,11 +1251,13 @@ async function groupDataByHousehold(formattedData) {
     });
 
     if (group.length === 2 && !secondaryMember) {
-      console.log(group, " has a problem");
-      throw {
-        status: 500,
-        message: `Unknown error with ${group[0]?.Household_Number__c} FFG: ${group[0]?.ffg_id}`,
-      };
+      // throw {
+      //   status: 500,
+      //   message: `FFG ${group[0]?.ffg_id} has 2 households but no secondary member.`,
+      // };
+      errors.push(
+        `FFG ${group[0]?.ffg_id} has 2 Active households but no secondary member.`
+      );
     }
 
     if (primaryMember && secondaryMember) {
