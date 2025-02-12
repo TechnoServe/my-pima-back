@@ -1582,7 +1582,7 @@ async function queryExistingParticipants(sf_conn, participantsData) {
   const participantIds = participantsData.map((part) => part.Id);
   if (participantIds.length === 0) return [];
 
-  const batchSize = 700;
+  const batchSize = 500;
   const participantRecords = [];
   for (let i = 0; i < participantIds.length; i += batchSize) {
     const batchIds = participantIds.slice(i, i + batchSize);

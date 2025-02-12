@@ -220,6 +220,10 @@ const server = new ApolloServer({
   },
   introspection: true,
   playground: true,
+  engine: {
+    reportTiming: false,  // Prevents Apollo from sending operation timing reports
+    reporting: false,     // Disables reporting entirely
+  }
 });
 
 server
