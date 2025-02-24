@@ -40,7 +40,8 @@ export const ParticipantsService = {
           Training_Group__r.Project_Location__c, TNS_Id__c, Status__c, Trainer_Name__c, 
           Project__c, Training_Group__c, Training_Group__r.Responsible_Staff__r.ReportsToId, 
           Household__c, Primary_Household_Member__c, Create_In_CommCare__c, Other_ID_Number__c, 
-          Phone_Number__c, Number_of_Coffee_Plots__c, Household__r.Number_of_Coffee_Plots__c
+          Phone_Number__c, Number_of_Coffee_Plots__c, Household__r.Number_of_Coffee_Plots__c, 
+          Training_Group__r.Location__r.Name, Training_Group__r.Project__r.Project_Country__c
         FROM Participant__c 
         WHERE Project__c = '${project.project_name}' AND Status__c = 'Active' 
         ORDER BY TNS_Id__c Asc, Household__r.Name Asc
@@ -86,11 +87,14 @@ export const ParticipantsService = {
           ffg_id: participant.Training_Group__r.TNS_Id__c,
           gender: participant.Gender__c,
           location:
-            locations.records.find(
-              (location) =>
-                location.Id ===
-                participant.Training_Group__r.Project_Location__c
-            )?.Location__r.Name || "N/A",
+            participant.Training_Group__r?.Project__r?.Project_Country__c ===
+            "a072400000eenMpAAI"
+              ? participant.Training_Group__r?.Location__r.Name
+              : locations.records.find(
+                  (location) =>
+                    location.Id ===
+                    participant.Training_Group__r.Project_Location__c
+                )?.Location__r?.Name || "N/A",
           tns_id: participant.TNS_Id__c,
           status: participant.Status__c,
           farmer_trainer: participant.Trainer_Name__c,
@@ -243,7 +247,7 @@ export const ParticipantsService = {
       };
     }
   },
-  
+
   async fetchParticipant(conn, pId) {
     try {
       // Fetch a single participant from Salesforce by pId
@@ -257,7 +261,7 @@ export const ParticipantsService = {
         FROM Participant__c 
         WHERE Status__c = 'Active' AND Id = '${pId}'
       `);
-  
+
       // If no records found, return a 404 response
       if (result.records.length === 0) {
         const response = {
@@ -267,15 +271,15 @@ export const ParticipantsService = {
         };
         return response;
       }
-  
+
       const participant = result.records[0];
-  
+
       // Additional data fetching
       const [locations, reportsTo] = await Promise.all([
         conn.query(`SELECT Id, Location__r.Name FROM Project_Location__c`),
         conn.query(`SELECT Id, Name FROM Contact`),
       ]);
-  
+
       // Process the participant data
       const participantData = {
         p_id: participant.Id,
@@ -302,7 +306,8 @@ export const ParticipantsService = {
         business_advisor:
           reportsTo.records.find(
             (contact) =>
-              contact.Id === participant.Training_Group__r.Responsible_Staff__r.ReportsToId
+              contact.Id ===
+              participant.Training_Group__r.Responsible_Staff__r.ReportsToId
           )?.Name || null,
         project_name: participant.Project__c,
         training_group: participant.Training_Group__c,
@@ -320,14 +325,14 @@ export const ParticipantsService = {
             : participant.Household__r.Number_of_Coffee_Plots__c
           : "ERROR HERE! Please report to the PIMA team",
       };
-  
+
       // Return a successful response with the participant data
       const response = {
         message: "Participant fetched successfully",
         status: 200,
         participant: participantData,
       };
-  
+
       return response;
     } catch (err) {
       console.error(err);
@@ -337,6 +342,5 @@ export const ParticipantsService = {
         participant: null,
       };
     }
-  }
-  
+  },
 };
