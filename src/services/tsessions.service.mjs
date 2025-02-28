@@ -220,7 +220,34 @@ const saveTrainingSessions = async (sessions, sf_project_id) => {
   try {
     transaction = await sequelize.transaction();
 
-    for (let i = 0; i < sessions.length; i += 100) {
+    // Extract the sf_training_session_id values from the incoming sessions
+    const sessionIds = sessions.map((sample) => sample.Id);
+
+    console.log(sessionIds);
+    // Fetch existing records with the same sf_training_session_id
+    const existingSessions = await TsSampleRepository.findAll({
+      sf_training_session_id: { [Op.in]: sessionIds }, // Matches the way `findAll` is structured
+    });
+
+    // Create a Set of existing session IDs for fast lookup
+    const existingSessionIds = new Set(
+      existingSessions.map((s) => s.sf_training_session_id)
+    );
+
+    // Filter out sessions that already exist in the database
+    const newSessions = sessions.filter(
+      (sample) => !existingSessionIds.has(sample.Id)
+    );
+
+    if (newSessions.length === 0) {
+      console.log("No new sessions to insert. Skipping save.");
+      await transaction.commit();
+      return;
+    }
+
+    console.log("new sessions", newSessions);
+
+    for (let i = 0; i < newSessions.length; i += 100) {
       const batch = sessions.slice(i, i + 100);
 
       // Batch save farm visits
