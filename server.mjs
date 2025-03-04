@@ -117,7 +117,7 @@ conn.login(
 );
 
 app.get("/api/sampling", async (req, res) => {
-  //await FarmVisitService.sampleFarmVisits(conn);
+  await FarmVisitService.sampleFarmVisits(conn);
   await TSessionService.sampleTSForApprovals(conn);
   res.send("Hello, My PIMA API Service!");
 });
