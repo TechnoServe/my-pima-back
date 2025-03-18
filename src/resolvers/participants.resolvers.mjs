@@ -1247,15 +1247,15 @@ async function groupDataByHousehold(formattedData) {
       }
     });
 
-    // if (group.length === 2 && !secondaryMember) {
-    //   // throw {
-    //   //   status: 500,
-    //   //   message: `FFG ${group[0]?.ffg_id} has 2 households but no secondary member.`,
-    //   // };
-    //   errors.push(
-    //     `FFG ${group[0]?.ffg_id} has 2 Active households but no secondary member.`
-    //   );
-    // }
+    if (group.length === 2 && !secondaryMember) {
+      // throw {
+      //   status: 500,
+      //   message: `FFG ${group[0]?.ffg_id} has 2 households but no secondary member.`,
+      // };
+      errors.push(
+        `FFG ${group[0]?.ffg_id} has 2 Active households but no secondary member.`
+      );
+    }
 
     if (primaryMember && secondaryMember) {
       if (
@@ -1271,12 +1271,12 @@ async function groupDataByHousehold(formattedData) {
       }
     }
 
-    // if (group.length > 2) {
-    //   errors.push(
-    //     `Household: ${group[0]?.Household_Number__c} FFG ${group[0]?.ffg_id} has more than 2 members`
-    //   );
-    //   return;
-    // }
+    if (group.length > 2) {
+      errors.push(
+        `Household: ${group[0]?.Household_Number__c} FFG ${group[0]?.ffg_id} has more than 2 members`
+      );
+      return;
+    }
 
     if (primaryMember) {
       households.push({
@@ -1290,12 +1290,12 @@ async function groupDataByHousehold(formattedData) {
         Number_of_Members__c: group.length,
       });
     }
-    // else {
-    //   console.log(group);
-    //   errors.push(
-    //     `Household Number: ${group[0].Household_Number__c} with SF ID: ${group[0].Household__c} in FFG: ${group[0].ffg_id} does not have a primary member.`
-    //   );
-    // }
+    else {
+      console.log(group);
+      errors.push(
+        `Household Number: ${group[0].Household_Number__c} with SF ID: ${group[0].Household__c} in FFG: ${group[0].ffg_id} does not have a primary member.`
+      );
+    }
   });
 
   console.log("done with whatever");
