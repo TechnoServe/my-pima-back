@@ -1362,7 +1362,7 @@ async function updateHouseholdsInSalesforce(
       .map((record) => record.Household__c)
       .filter((record) => record !== "");
 
-    const householdBatchSize = 700;
+    const householdBatchSize = 500;
     const batchedHouseholdNumbers = chunkArray(
       existingHouseholdNumbers,
       householdBatchSize
