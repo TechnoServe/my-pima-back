@@ -5,7 +5,7 @@ import logger from "../config/logger.mjs";
 import { TSessionService } from "../services/tsessions.service.mjs";
 
 // Schedule cron job to run every hour
-cron.schedule("0 * * * *", async () => {
+cron.schedule("0 */8 * * *", async () => {
   try {
     logger.info("Attendance caching beginning.");
     await AttendanceService.cacheAttendanceData(conn);

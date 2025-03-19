@@ -2,7 +2,11 @@ import { AttendanceService } from "../services/attendance.service.mjs";
 
 const AttendanceResolvers = {
   Query: {
-    getAttendances: async (_, { project_id }, { sf_conn }) => {
+    getAttendances: async (
+      _,
+      { project_id, limit = 10000, offset = 0 },
+      { sf_conn }
+    ) => {
       try {
         const attendanceData = await AttendanceService.fetchAndCacheAttendance(
           project_id,
@@ -16,10 +20,13 @@ const AttendanceResolvers = {
           };
         }
 
+        // Slice the full cached data for this request
+        const paginatedData = attendanceData.slice(offset, offset + limit);
+
         return {
           message: "Attendance fetched successfully",
           status: 200,
-          attendance: attendanceData.map((attendance) => ({
+          attendance: paginatedData.map((attendance) => ({
             attendance_id: attendance.Id,
             attendance_name: attendance.Name,
             participant_id: attendance.Participant__c,
@@ -28,11 +35,12 @@ const AttendanceResolvers = {
               attendance.Attended__c === 1 ? "Present" : "Absent",
             session_id: attendance.Training_Session__c,
             module_name:
-              attendance.Training_Session__r.Training_Module__r.Module_Title__c,
+              attendance.Training_Session__r?.Training_Module__r
+                ?.Module_Title__c || "",
             module_number:
-              attendance.Training_Session__r.Training_Module__r
-                .Module_Number__c,
-            module_id: attendance.Training_Session__r.Training_Module__c,
+              attendance.Training_Session__r?.Training_Module__r
+                ?.Module_Number__c || "",
+            module_id: attendance.Training_Session__r?.Training_Module__c || "",
           })),
         };
       } catch (error) {

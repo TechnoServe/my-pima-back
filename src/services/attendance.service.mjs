@@ -11,6 +11,9 @@ export const AttendanceService = {
       );
       return JSON.parse(cachedData);
     }
+    else{
+      console.log(`no cache.. Querying from SF`);
+    }
 
     try {
       let records = [];
@@ -30,9 +33,11 @@ export const AttendanceService = {
       }
 
       if (records.length > 0) {
-        await redis.set(cacheKey, JSON.stringify(records), "EX", 3600);
+        await redis.set(cacheKey, JSON.stringify(records), "EX", 3600 * 8);
         console.log(`Attendance data for project ${projectId} cached`);
       }
+
+      console.log(`Returning ${records.length} attendance records from SF`);
 
       return records;
     } catch (error) {
@@ -45,7 +50,7 @@ export const AttendanceService = {
   },
   async cacheAttendanceData(sf_conn) {
     try {
-      const projectIds = ["a0EOj000002RJS1MAO"];
+      const projectIds = ["a0EOj000002RJS1MAO", "a0EOj000000VN5BMAW"];
 
       for (let projectId of projectIds) {
         await this.fetchAndCacheAttendance(projectId, sf_conn);
