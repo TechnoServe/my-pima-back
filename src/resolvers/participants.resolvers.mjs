@@ -138,8 +138,7 @@ const ParticipantsResolvers = {
                 "An unkown error occured. Please contact the PIMA team.",
             };
           }
-        } 
-        else {
+        } else {
           throw {
             status: partsResult.status || 500,
             message:
@@ -1180,7 +1179,9 @@ function formatParticipantData(fileData, trainingGroupsMap, recentHHData) {
 
         let hhNumber = "";
         // Get the value of Household_Number__c and clean it
-        const rawHHNumber = values[header.indexOf("Household_Number__c")].replace(/"/g, "");
+        const rawHHNumber = values[
+          header.indexOf("Household_Number__c")
+        ].replace(/"/g, "");
 
         // Format the value to always have 2 digits
         hhNumber = String(parseInt(rawHHNumber, 10)).padStart(2, "0");
@@ -1232,10 +1233,14 @@ async function groupDataByHousehold(formattedData) {
 
   Object.values(groupedData).forEach((group) => {
     const primaryMember = group.find(
-      (member) => member["Primary_Household_Member__c"] === "Yes" && member["Status__c"] === "Active"
+      (member) =>
+        member["Primary_Household_Member__c"] === "Yes" &&
+        member["Status__c"] === "Active"
     );
     const secondaryMember = group.find(
-      (member) => member["Primary_Household_Member__c"] === "No" && member["Status__c"] === "Active"
+      (member) =>
+        member["Primary_Household_Member__c"] === "No" &&
+        member["Status__c"] === "Active"
     );
 
     group.forEach((member) => {
@@ -1253,7 +1258,7 @@ async function groupDataByHousehold(formattedData) {
       //   message: `FFG ${group[0]?.ffg_id} has 2 households but no secondary member.`,
       // };
       errors.push(
-        `FFG ${group[0]?.ffg_id} has 2 Active households but no secondary member.`
+        `FFG ${group[0]?.ffg_id} Household ${group[0]?.Household_Number__c}has 2 Active households but no secondary member.`
       );
     }
 
@@ -1283,14 +1288,12 @@ async function groupDataByHousehold(formattedData) {
         ...primaryMember,
         Number_of_Members__c: group.length,
       });
-    } 
-    else if(secondaryMember){
+    } else if (secondaryMember) {
       households.push({
         ...primaryMember,
         Number_of_Members__c: group.length,
       });
-    }
-    else {
+    } else {
       console.log(group);
       errors.push(
         `Household Number: ${group[0].Household_Number__c} with SF ID: ${group[0].Household__c} in FFG: ${group[0].ffg_id} does not have a primary member.`

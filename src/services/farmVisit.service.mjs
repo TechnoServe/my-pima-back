@@ -35,6 +35,17 @@ const bpFieldMapping = [
     ],
   },
   {
+    practiceName: "Compost BU",
+    fields: [
+      {
+        field: "Compost_Results__c",
+        fieldLabel: "Do you have compost manure?",
+        imageField: "photo_of_the_compost_manure__c",
+        hasResults: false,
+      },
+    ],
+  },
+  {
     practiceName: "Record Book",
     fields: [
       {
@@ -568,6 +579,10 @@ const extractBestPracticesFromVisit = (bpFieldMapping, visit) => {
       if (record.image_url !== null) {
         bestPractices.push(record);
       }
+
+      if(record.practice_name == record.practice_name == "Compost BU"){
+        bestPractices.push(record);
+      }
     }
   }
 
@@ -653,6 +668,18 @@ const getProjectsToSample = async () => {
       sampleSize: 1,
       project_country: "Kenya",
     },
+    {
+      sf_project_id: "a0EOj000002C7ivMAC",
+      sampleAll: true,
+      sampleSize: null,
+      project_country: "Burundi",
+    },
+    {
+      sf_project_id: "a0EOj000002FMGnMAO",
+      sampleAll: true,
+      sampleSize: null,
+      project_country: "Burundi",
+    },
   ];
 };
 
@@ -666,7 +693,9 @@ const processFVResponse = (farmVisits) =>
       : "N/A",
     tg_tns_id: fv.Training_Group__r.TNS_Id__c || "N/A",
     farmer_tns_id: fv.Farm_Visited__r.TNS_Id__c || "N/A",
-    household_tns_id: fv.Farm_Visited__r.Household__r ? fv.Farm_Visited__r.Household__r.Household_ID__c || "N/A": 'N/A',
+    household_tns_id: fv.Farm_Visited__r.Household__r
+      ? fv.Farm_Visited__r.Household__r.Household_ID__c || "N/A"
+      : "N/A",
     farm_visited: fv.Farm_Visited__r
       ? fv.Farm_Visited__r.Name + " " + fv.Farm_Visited__r.Last_Name__c
       : "N/A",
@@ -675,5 +704,5 @@ const processFVResponse = (farmVisits) =>
     date_visited: fv.Date_Visited__c,
     pima_household_id: fv.Farm_Visited__r.Household__c,
     pima_farmer_id: fv.Farm_Visited__c,
-    gender: fv.Farm_Visited__r.Gender__c
+    gender: fv.Farm_Visited__r.Gender__c,
   }));
