@@ -168,7 +168,7 @@ const ProjectRoleResolvers = {
             {
               model: Projects,
               as: "tbl_project",
-              where: { status: "active" }, // only include active projects
+              where: { project_status: "active" }, // only include active projects
             },
             {
               model: Users,
