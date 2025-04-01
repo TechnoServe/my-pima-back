@@ -163,26 +163,47 @@ const ProjectRoleResolvers = {
     getProjectRolesByUserId: async (_, { user_id }, {}) => {
       try {
         const res = await ProjectRole.findAll({
-          where: {
-            user_id,
-          },
+          where: { user_id },
+          include: [
+            {
+              model: Projects,
+              as: "tbl_project",
+              where: { status: "active" }, // only include active projects
+            },
+            {
+              model: Users,
+              as: "tbl_user",
+            },
+            {
+              model: Roles,
+              as: "tbl_role",
+            },
+          ],
         });
-
-        if (!res) {
+    
+        if (!res || res.length === 0) {
           return {
-            message: "Project Role not found",
+            message: "No active project roles found for this user",
             status: 404,
           };
         }
-
+    
+        // map included models
+        res.map((project_role) => {
+          project_role.role = project_role.tbl_role;
+          project_role.user = project_role.tbl_user;
+          project_role.project = project_role.tbl_project;
+          return project_role;
+        });
+    
         return {
-          message: "Project Role fetched successfully",
+          message: "Active project roles fetched successfully",
           status: 200,
           project_role: res,
         };
       } catch (err) {
         console.error(err);
-
+    
         return {
           message: err.message,
           status: 500,
