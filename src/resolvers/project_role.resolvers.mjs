@@ -465,29 +465,29 @@ const ProjectRoleResolvers = {
           for (const project of projects) {
             const existing = await ProjectRole.findOne({
               where: {
-                user_id: user.id,
-                project_id: project.id,
+                user_id: user.user_id,
+                project_id: project.project_id,
               },
             });
 
             if (existing) {
               result.skipped.push({
-                user_id: user.id,
-                project_id: project.id,
+                user_id: user.user_id,
+                project_id: project.project_id,
                 reason: "Already has a role in this project",
               });
               continue;
             }
 
             const newRole = await ProjectRole.create({
-              user_id: user.id,
-              project_id: project.id,
+              user_id: user.user_id,
+              project_id: project.project_id,
               role: role_id,
             });
 
             result.created.push({
-              user_id: user.id,
-              project_id: project.id,
+              user_id: user.user_id,
+              project_id: project.project_id,
               role_id,
             });
           }
