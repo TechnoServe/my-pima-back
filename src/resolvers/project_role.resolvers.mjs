@@ -425,6 +425,87 @@ const ProjectRoleResolvers = {
         };
       }
     },
+
+    assignUsersToAllProjects: async (_, { user_ids, role_id }, {}) => {
+      try {
+        // Validate role
+        const role = await Roles.findByPk(role_id);
+        if (!role) {
+          return {
+            message: "Role not found",
+            status: 404,
+          };
+        }
+
+        // Get users by ID
+        const users = await Users.findAll({
+          where: {
+            user_id: user_ids,
+          },
+        });
+
+        console.log(users);
+
+        const foundUserIds = users.map((user) => user.user_id);
+        const missingUserIds = user_ids.filter(
+          (id) => !foundUserIds.includes(id)
+        );
+
+        // Fetch all projects
+        const projects = await Projects.findAll();
+
+        const result = {
+          created: [],
+          skipped: [],
+          missingUsers: missingUserIds,
+        };
+
+        // Assign role to each user in all projects
+        for (const user of users) {
+          for (const project of projects) {
+            const existing = await ProjectRole.findOne({
+              where: {
+                user_id: user.id,
+                project_id: project.id,
+              },
+            });
+
+            if (existing) {
+              result.skipped.push({
+                user_id: user.id,
+                project_id: project.id,
+                reason: "Already has a role in this project",
+              });
+              continue;
+            }
+
+            const newRole = await ProjectRole.create({
+              user_id: user.id,
+              project_id: project.id,
+              role: role_id,
+            });
+
+            result.created.push({
+              user_id: user.id,
+              project_id: project.id,
+              role_id,
+            });
+          }
+        }
+
+        return {
+          message: "Users successfully assigned to all projects",
+          status: 200,
+          result,
+        };
+      } catch (err) {
+        console.error(err);
+        return {
+          message: err.message,
+          status: 500,
+        };
+      }
+    },
   },
 };
 

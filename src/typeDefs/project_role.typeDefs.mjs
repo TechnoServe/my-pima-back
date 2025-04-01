@@ -33,6 +33,10 @@ const ProjectRoleTypeDefs = gql`
       role_id: String!
     ): ProjectRoleResponse
     deleteProjectRole(pr_id: ID!): ProjectRoleResponse
+    assignUsersToAllProjects(
+      user_ids: [ID!]!
+      role_id: String!
+    ): BulkProjectRoleResponse
   }
 
   type ProjectRolesResponse {
@@ -51,6 +55,30 @@ const ProjectRoleTypeDefs = gql`
     message: String
     status: Int
     total_loaded: Int
+  }
+
+  type BulkProjectRoleResponse {
+    message: String!
+    status: Int!
+    result: ProjectRoleBulkResult
+  }
+
+  type ProjectRoleBulkResult {
+    created: [ProjectRoleCreated!]
+    skipped: [ProjectRoleSkipped!]
+    missingUsers: [ID!]
+  }
+
+  type ProjectRoleCreated {
+    user_id: ID!
+    project_id: ID!
+    role_id: String!
+  }
+
+  type ProjectRoleSkipped {
+    user_id: ID!
+    project_id: ID!
+    reason: String!
   }
 `;
 
