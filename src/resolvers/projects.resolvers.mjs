@@ -76,6 +76,7 @@ const ProjectsResolvers = {
           include: [
             {
               model: Projects,
+              where: { project_status: "active" },
             },
           ],
         });
