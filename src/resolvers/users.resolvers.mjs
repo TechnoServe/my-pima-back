@@ -1,5 +1,7 @@
 import { Op } from "sequelize";
 import Roles from "../models/roles.model.mjs";
+import Projects from "../models/projects.models.mjs";
+import ProjectRole from "../models/project_role.model.mjs";
 import Users from "../models/users.model.mjs";
 import bcrypt from "bcrypt";
 import nodemailer from "nodemailer";
@@ -176,6 +178,54 @@ const UsersResolvers = {
         return {
           message: err.message,
           status: err.status,
+        };
+      }
+    },
+
+    getWetMillBusinessAdvisors: async (_parent, { sfProjectId }) => {
+      try {
+        // 1. Find the project by its Salesforce ID
+        const project = await Projects.findOne({
+          where: { sf_project_id: sfProjectId },
+        });
+
+        if (!project) {
+          return {
+            message: `No project found for sf_project_id=${sfProjectId}`,
+            status: 404,
+            advisors: [],
+          };
+        }
+
+        // 2. Fetch all project-role links for that project, including the user
+        const roleLinks = await ProjectRole.findAll({
+          where: { project_id: project.project_id },
+          include: [
+            {
+              model: Users,
+              attributes: ["user_id", "user_name"],
+            },
+          ],
+        });
+
+        // 3. Map into the exact shape your front end expects
+        const advisors = roleLinks.map((link) => ({
+          id: link.user_id, // from Users.user_id
+          name: link.User.user_name, // from Users.user_name
+          wetmillId: '', // we re-use project_id as "wetmillId"
+        }));
+
+        return {
+          message: "Business Advisors fetched successfully",
+          status: 200,
+          advisors,
+        };
+      } catch (err) {
+        console.error("Error fetching business advisors:", err);
+        return {
+          message: err.message || "Internal server error",
+          status: 500,
+          advisors: [],
         };
       }
     },

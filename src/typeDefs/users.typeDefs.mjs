@@ -1,6 +1,18 @@
 import { gql } from "apollo-server-express";
 
 const usersTypeDefs = gql`
+  type BusinessAdvisor {
+    id: ID!
+    name: String
+    wetmillId: ID
+  }
+
+  type BusinessAdvisorsResponse {
+    message: String!
+    status: Int!
+    advisors: [BusinessAdvisor]
+  }
+    
   type User {
     user_id: ID
     sf_user_id: String
@@ -19,6 +31,7 @@ const usersTypeDefs = gql`
     getUsers: UsersResponse
     getUserById(user_id: ID!): UserResponse
     getUserBySFId(sf_user_id: String!): UserResponse
+    getWetMillBusinessAdvisors(sfProjectId: String!): BusinessAdvisorsResponse
   }
 
   type LoadUsersResponse {

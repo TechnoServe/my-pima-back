@@ -44,6 +44,10 @@ import TrainingModulesResolvers from "./src/resolvers/training_modules.resolvers
 import PerformanceResolvers from "./src/resolvers/performance.resolvers.mjs";
 import PerformanceTypeDefs from "./src/typeDefs/performance.typeDefs.mjs";
 import { FarmVisitService } from "./src/services/farmVisit.service.mjs";
+import WetmillsResolvers from "./src/resolvers/wetmills.resolvers.mjs";
+import wetmillsTypeDefs from "./src/typeDefs/wetmills.typeDefs.mjs";
+import WetMillvisitsTypeDefs from "./src/typeDefs/wetmill_visits.typeDefs.mjs";
+import WetMillVisitsResolvers from "./src/resolvers/wetmill_visits.resolvers.mjs";
 import axios from "axios";
 import "./src/cron-jobs/attendance.cron.mjs";
 import "./src/cron-jobs/farmVisit.cron.mjs";
@@ -193,6 +197,8 @@ const server = new ApolloServer({
     FVQAsTypeDefs,
     TrainingModulesTypeDefs,
     PerformanceTypeDefs,
+    wetmillsTypeDefs,
+    WetMillvisitsTypeDefs,
   ],
   resolvers: [
     PermissionsResolvers,
@@ -209,6 +215,8 @@ const server = new ApolloServer({
     FVQAsResolvers,
     TrainingModulesResolvers,
     PerformanceResolvers,
+    WetmillsResolvers,
+    WetMillVisitsResolvers,
   ],
   subscriptions: { path: "/subscriptions", onConnect: () => pubSub },
   csrfPrevention: true,
@@ -221,9 +229,9 @@ const server = new ApolloServer({
   introspection: true,
   playground: true,
   engine: {
-    reportTiming: false,  // Prevents Apollo from sending operation timing reports
-    reporting: false,     // Disables reporting entirely
-  }
+    reportTiming: false, // Prevents Apollo from sending operation timing reports
+    reporting: false, // Disables reporting entirely
+  },
 });
 
 server
