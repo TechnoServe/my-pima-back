@@ -1,8 +1,8 @@
 {
   "development": {
     "username": "postgres",
-    "password": "1234",
-    "database": "my_pima_db",
+    "password": "admin@12345",
+    "database": "my_pima_dev",
     "host": "localhost",
     "dialect": "postgres",
     "protocol": "postgres",

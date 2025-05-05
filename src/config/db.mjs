@@ -19,6 +19,7 @@ const sequelize = new Sequelize(
       ssl: false,
       native: true,
     },
+    logging: false
   }
 );
 
