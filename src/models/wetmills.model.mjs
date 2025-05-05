@@ -27,9 +27,6 @@ const Wetmills = sequelize.define(
     exporting_status: {
       type: DataTypes.STRING,
     },
-    programe: {
-      type: DataTypes.STRING,
-    },
     country: {
       type: DataTypes.STRING,
     },
