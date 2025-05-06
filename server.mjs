@@ -36,6 +36,7 @@ import AttendanceTypeDefs from "./src/typeDefs/attendance.typeDefs.mjs";
 import AttendanceResolvers from "./src/resolvers/attendance.resolvers.mjs";
 import FarmVisitsTypeDefs from "./src/typeDefs/farm_visits.typeDefs.mjs";
 import FarmVisitsResolvers from "./src/resolvers/farm_visits.resolvers.mjs";
+import dashboardTypeDefs from "./src/typeDefs/wt_dashboard.typeDefs.mjs";
 import { getDirName } from "./src/utils/getDirName.mjs";
 import FVQAsTypeDefs from "./src/typeDefs/fv_qas.typeDefs.mjs";
 import FVQAsResolvers from "./src/resolvers/fv_qas.resolvers.mjs";
@@ -48,6 +49,7 @@ import WetmillsResolvers from "./src/resolvers/wetmills.resolvers.mjs";
 import wetmillsTypeDefs from "./src/typeDefs/wetmills.typeDefs.mjs";
 import WetMillvisitsTypeDefs from "./src/typeDefs/wetmill_visits.typeDefs.mjs";
 import WetMillVisitsResolvers from "./src/resolvers/wetmill_visits.resolvers.mjs";
+import DashboardResolvers from "./src/resolvers/wt_dashboard.resolvers.mjs";
 import axios from "axios";
 import "./src/cron-jobs/attendance.cron.mjs";
 import "./src/cron-jobs/farmVisit.cron.mjs";
@@ -199,6 +201,7 @@ const server = new ApolloServer({
     PerformanceTypeDefs,
     wetmillsTypeDefs,
     WetMillvisitsTypeDefs,
+    dashboardTypeDefs,
   ],
   resolvers: [
     PermissionsResolvers,
@@ -217,6 +220,7 @@ const server = new ApolloServer({
     PerformanceResolvers,
     WetmillsResolvers,
     WetMillVisitsResolvers,
+    DashboardResolvers
   ],
   subscriptions: { path: "/subscriptions", onConnect: () => pubSub },
   csrfPrevention: true,

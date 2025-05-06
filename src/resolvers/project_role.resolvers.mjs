@@ -10,15 +10,22 @@ const ProjectRoleResolvers = {
         // create soql query
         const query = `SELECT Id, Project__c, Role__c, Staff__c FROM Project_Role__c`;
 
-        // query salesforce
-        const res = await sf_conn.query(query);
+        let allRecords = [];
+        let result = await sf_conn.query(query);
+
+        allRecords = allRecords.concat(result.records);
+
+        while (!result.done) {
+          result = await sf_conn.queryMore(result.nextRecordsUrl);
+          allRecords = allRecords.concat(result.records);
+        }
 
         // for every record, check if Project__c or Staff__C exists in Projects or Users table respectively
         // if it doesn't exist, skip it
         // if it exists, create a new ProjectRole record with the project_id and user_id
-        for (let i = 0; i < res.records.length; i++) {
-          console.log(i, res.records.length);
-          const record = res.records[i];
+        for (let i = 0; i < allRecords.length; i++) {
+          // console.log(i, res.records.length);
+          const record = allRecords[i];
 
           const project = await Projects.findOne({
             where: {
@@ -31,6 +38,10 @@ const ProjectRoleResolvers = {
               sf_user_id: record.Staff__c,
             },
           });
+
+          if (record.Staff__c === '003Oj00000TT1Y1IAL') {
+            console.log('found record with Staff__c = 003Oj00000TT1Y1IAL');
+          }
 
           if (!project || !user) {
             continue;
@@ -91,7 +102,7 @@ const ProjectRoleResolvers = {
       }
     },
 
-    getProjectRoles: async (_, __, {}) => {
+    getProjectRoles: async (_, __, { }) => {
       try {
         const res = await ProjectRole.findAll({
           include: [
@@ -134,7 +145,7 @@ const ProjectRoleResolvers = {
       }
     },
 
-    getProjectRoleById: async (_, { pr_id }, {}) => {
+    getProjectRoleById: async (_, { pr_id }, { }) => {
       try {
         const res = await ProjectRole.findByPk(pr_id);
 
@@ -160,7 +171,7 @@ const ProjectRoleResolvers = {
       }
     },
 
-    getProjectRolesByUserId: async (_, { user_id }, {}) => {
+    getProjectRolesByUserId: async (_, { user_id }, { }) => {
       try {
         const res = await ProjectRole.findAll({
           where: {
@@ -190,7 +201,7 @@ const ProjectRoleResolvers = {
       }
     },
 
-    getProjectRolesByProjectId: async (_, { project_id }, {}) => {
+    getProjectRolesByProjectId: async (_, { project_id }, { }) => {
       try {
         const res = await ProjectRole.findAll({
           where: {
@@ -245,7 +256,7 @@ const ProjectRoleResolvers = {
   },
 
   Mutation: {
-    addProjectRole: async (_, { user_id, project_id, role_id }, {}) => {
+    addProjectRole: async (_, { user_id, project_id, role_id }, { }) => {
       try {
         // Check if user exists
         const user = await Users.findByPk(user_id);
@@ -312,7 +323,7 @@ const ProjectRoleResolvers = {
     updateProjectRole: async (
       _,
       { pr_id, user_id, project_id, role_id },
-      {}
+      { }
     ) => {
       // Check if project_role exists
       const project_role = await ProjectRole.findByPk(pr_id);
@@ -393,7 +404,7 @@ const ProjectRoleResolvers = {
       }
     },
 
-    deleteProjectRole: async (_, { pr_id }, {}) => {
+    deleteProjectRole: async (_, { pr_id }, { }) => {
       try {
         // Check if projectRole exists
         const projectRole = await ProjectRole.findByPk(pr_id);
@@ -426,7 +437,7 @@ const ProjectRoleResolvers = {
       }
     },
 
-    assignUsersToAllProjects: async (_, { user_ids, role_id }, {}) => {
+    assignUsersToAllProjects: async (_, { user_ids, role_id }, { }) => {
       try {
         // Validate role
         const role = await Roles.findByPk(role_id);

@@ -182,7 +182,7 @@ const UsersResolvers = {
       }
     },
 
-    getWetMillBusinessAdvisors: async (_parent, { sfProjectId }) => {
+    getWetMillBusinessAdvisors: async (_, { sfProjectId }) => {
       try {
         // 1. Find the project by its Salesforce ID
         const project = await Projects.findOne({
@@ -197,6 +197,8 @@ const UsersResolvers = {
           };
         }
 
+        console.log("Project:", project.toJSON());
+
         // 2. Fetch all project-role links for that project, including the user
         const roleLinks = await ProjectRole.findAll({
           where: { project_id: project.project_id },
@@ -208,10 +210,12 @@ const UsersResolvers = {
           ],
         });
 
+        console.log("Role Links:", roleLinks.map((link) => link.toJSON()));
+
         // 3. Map into the exact shape your front end expects
         const advisors = roleLinks.map((link) => ({
           id: link.user_id, // from Users.user_id
-          name: link.User.user_name, // from Users.user_name
+          name: link.tbl_user.user_name, // from Users.user_name
           wetmillId: '', // we re-use project_id as "wetmillId"
         }));
 

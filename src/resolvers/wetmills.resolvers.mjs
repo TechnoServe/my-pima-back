@@ -4,12 +4,12 @@ import SurveyResponse from "../models/survey_response.model.mjs";
 import SurveyQuestionResponse from "../models/survey_question_response.model.mjs";
 
 const ALLOWED_SURVEYS = [
+  "manager_needs_assessment",
   "cpqi",
   "employees",
   "financials",
   "infrastructure",
   "kpis",
-  "manager_needs_assessment",
   "wet_mill_training",
   "waste_water_management",
   "water_and_energy_use",

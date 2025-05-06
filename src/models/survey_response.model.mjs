@@ -1,6 +1,7 @@
 import { DataTypes } from "sequelize";
 import sequelize from "../config/db.mjs";
 import SurveyQuestionResponse from "./survey_question_response.model.mjs";
+import WetmillVisit from "./wetmill_visits.model.mjs";
 
 const SurveyResponse = sequelize.define(
   "survey_responses",
@@ -46,5 +47,16 @@ SurveyResponse.hasMany(SurveyQuestionResponse, {
   foreignKey: "survey_response_id",
   as: "question_responses",
 });
+
+SurveyQuestionResponse.belongsTo(SurveyResponse, {
+  foreignKey: "survey_response_id",
+  as: "survey_response",
+});
+
+SurveyResponse.belongsTo(WetmillVisit, {
+  foreignKey: "form_visit_id",
+  as: "wetmill_visit",
+});
+
 
 export default SurveyResponse;
