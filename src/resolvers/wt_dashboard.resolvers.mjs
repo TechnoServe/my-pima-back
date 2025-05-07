@@ -2,8 +2,16 @@ import { Op } from "sequelize";
 import SurveyResponse from "../models/survey_response.model.mjs";
 import SurveyQuestionResponse from "../models/survey_question_response.model.mjs";
 import WetmillVisit from "../models/wetmill_visits.model.mjs";
-import { getMissingDocuments, getInfrastructureChecklist, getFinancialBreakdown, getEmployeeStats } from "../services/dashboard.service.mjs";
-
+import {
+    getMissingDocuments,
+    getInfrastructureChecklist,
+    getFinancialBreakdown,
+    getEmployeeStats,
+    getCpqiStats,
+    getCpqiChecklist,
+    getTrainingAttendanceByTopic,
+    getTrainingAttendanceOverall,
+} from "../services/dashboard.service.mjs";
 
 const dashboardResolvers = {
     Query: {
@@ -69,21 +77,15 @@ const dashboardResolvers = {
                 };
             });
         },
+        getMissingDocuments: async (_, { wetmillId }) => await getMissingDocuments(wetmillId),
+        getInfrastructureChecklist: async (_, { wetmillId }) => await getInfrastructureChecklist(wetmillId),
+        getFinancialBreakdown: async (_, { wetmillId }) => await getFinancialBreakdown(wetmillId),
+        getEmployeeStats: async (_, { wetmillId }) => await getEmployeeStats(wetmillId),
+        getCpqiStats: async (_, { wetmillId }) => await getCpqiStats(wetmillId),
+        getCpqiChecklist: async (_, { wetmillId }) => await getCpqiChecklist(wetmillId),
+        getTrainingAttendanceByTopic: async (_, { wetmillId }) => getTrainingAttendanceByTopic(wetmillId),
+        getTrainingAttendanceOverall: async (_, { wetmillId }) => getTrainingAttendanceOverall(wetmillId),
 
-        getMissingDocuments: async (_, { wetmillId }) => {
-            return await getMissingDocuments(wetmillId);
-        },
-
-        getInfrastructureChecklist: async (_, { wetmillId }) => {
-            return await getInfrastructureChecklist(wetmillId);
-        },
-
-        getFinancialBreakdown: async (_, { wetmillId }) => {
-            return await getFinancialBreakdown(wetmillId);
-        },
-        getEmployeeStats: async (_, { wetmillId }) => {
-            return await getEmployeeStats(wetmillId)
-        },
     },
 };
 

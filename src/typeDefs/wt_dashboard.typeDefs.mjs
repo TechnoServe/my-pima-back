@@ -39,12 +39,55 @@ const dashboardTypeDefs = gql`
     womenDaily: Int!
   }
 
+  #############################
+  # CPQI Stats (graphs)
+  #############################
+  type CPQISectionStat {
+    sectionName: String!
+    yesPct: Float!
+    noPct: Float!
+  }
+
+  type CPQIStats {
+    sections: [CPQISectionStat!]!
+    overallYesPct: Float!
+    overallNoPct: Float!
+  }
+
+  #############################
+  # CPQI Checklist (list)
+  #############################
+  type CPQICriterion {
+    questionName: String!
+    yes: Boolean!
+  }
+
+  type CPQISectionChecklist {
+    sectionName: String!
+    criteria: [CPQICriterion!]!
+  }
+
+  type TrainingTopicAttendance {
+    topic:  String!
+    male:   Int!
+    female: Int!
+ }
+
+  type TrainingAttendanceOverall {
+    male:   Int!
+    female: Int!
+ }
+
   extend type Query {
     getOperationsRanking(wetmillId: ID!): [OperationNeed!]!
     getMissingDocuments(wetmillId: ID!): [String!]!
     getInfrastructureChecklist(wetmillId: ID!): InfrastructureChecklist!
     getFinancialBreakdown(wetmillId: ID!): FinancialBreakdown!
     getEmployeeStats(wetmillId: ID!): EmployeeStats!
+    getCpqiStats(wetmillId: ID!): CPQIStats!
+    getCpqiChecklist(wetmillId: ID!): [CPQISectionChecklist!]!
+    getTrainingAttendanceByTopic(wetmillId: ID!): [TrainingTopicAttendance!]!
+    getTrainingAttendanceOverall(wetmillId: ID!): TrainingAttendanceOverall!
   }
 `;
 
