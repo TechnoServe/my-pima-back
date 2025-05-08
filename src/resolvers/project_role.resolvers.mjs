@@ -90,7 +90,7 @@ const ProjectRoleResolvers = {
         return {
           message: "Project Roles loaded successfully",
           status: 200,
-          total_loaded: res.records.length,
+          total_loaded: allRecords.length,
         };
       } catch (err) {
         console.log(err);

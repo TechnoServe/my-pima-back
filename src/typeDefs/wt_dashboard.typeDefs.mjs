@@ -78,6 +78,16 @@ const dashboardTypeDefs = gql`
     female: Int!
  }
 
+  type KpiStats {
+    cherry: Float!
+    total: Float!
+  }
+
+  type ParchmentDistribution {
+    grade: String!
+    value: Float!
+ }
+
   extend type Query {
     getOperationsRanking(wetmillId: ID!): [OperationNeed!]!
     getMissingDocuments(wetmillId: ID!): [String!]!
@@ -88,6 +98,9 @@ const dashboardTypeDefs = gql`
     getCpqiChecklist(wetmillId: ID!): [CPQISectionChecklist!]!
     getTrainingAttendanceByTopic(wetmillId: ID!): [TrainingTopicAttendance!]!
     getTrainingAttendanceOverall(wetmillId: ID!): TrainingAttendanceOverall!
+    getKpiStats(wetmillId: ID!): KpiStats!
+    getParchmentDistribution(wetmillId: ID!): [ParchmentDistribution!]!
+
   }
 `;
 

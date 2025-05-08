@@ -429,3 +429,84 @@ export async function getTrainingAttendanceOverall(wetmillId) {
     );
 }
 
+export async function getKpiStats(wetmillId) {
+    // 1) find the latest KPI survey response for this wetmill
+    const latestResponse = await SurveyResponse.findOne({
+        where: { survey_type: "kpis" },
+        include: [{
+            model: WetmillVisit,
+            as: "wetmill_visit",
+            where: { wetmill_id: wetmillId },
+            attributes: [],        // we don’t need any columns from WetmillVisit
+        }],
+        order: [["created_at", "DESC"]],
+        attributes: ["id"],
+    });
+
+    if (!latestResponse) {
+        return { cherry: 0, total: 0 };
+    }
+
+    // 2) fetch the two KPI question responses for that survey_response
+    const rows = await SurveyQuestionResponse.findAll({
+        where: {
+            survey_response_id: latestResponse.id,
+            question_name: [
+                "cherry_price_kg_of_cherry_paid_to_farmer_end_of_the_season",
+                "total_sales_gross_revenues_y"
+            ],
+        },
+        attributes: ["question_name", "value_number", "value_text"],
+    });
+
+    // 3) pick out the numeric values
+    let cherry = 0, total = 0;
+    for (const r of rows) {
+        if (r.question_name === "cherry_price_kg_of_cherry_paid_to_farmer_end_of_the_season") {
+            cherry = r.value_number ?? parseFloat(r.value_text) ?? 0;
+        }
+        if (r.question_name === "total_sales_gross_revenues_y") {
+            total = r.value_number ?? parseFloat(r.value_text) ?? 0;
+        }
+    }
+
+    return { cherry, total };
+}
+
+export async function getParchmentDistribution(wetmillId) {
+    // 1) find the latest KPI survey for this wetmill
+    const kpiResponse = await SurveyResponse.findOne({
+        where: { survey_type: "kpis" },
+        include: [{
+            model: WetmillVisit,
+            as: "wetmill_visit",
+            where: { wetmill_id: wetmillId },
+            attributes: []
+        }],
+        order: [["created_at", "DESC"]],
+    });
+    if (!kpiResponse) return [];
+
+    // 2) pull the four parchment fields
+    const rows = await SurveyQuestionResponse.findAll({
+        where: {
+            survey_response_id: kpiResponse.id,
+            question_name: {
+                [Op.in]: [
+                    "a1_parchment",
+                    "a2_parchment",
+                    "a3_parchment",
+                    "a4_parchment",
+                ],
+            },
+        },
+        attributes: ["question_name", "value_number"],
+    });
+
+    // 3) map into { grade, value }
+    return rows.map((r) => ({
+        grade: r.question_name.replace("_parchment", "").toUpperCase(),
+        value: r.value_number || 0,
+    }));
+}
+

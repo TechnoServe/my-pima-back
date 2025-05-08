@@ -11,6 +11,8 @@ import {
     getCpqiChecklist,
     getTrainingAttendanceByTopic,
     getTrainingAttendanceOverall,
+    getKpiStats,
+    getParchmentDistribution,
 } from "../services/dashboard.service.mjs";
 
 const dashboardResolvers = {
@@ -85,6 +87,21 @@ const dashboardResolvers = {
         getCpqiChecklist: async (_, { wetmillId }) => await getCpqiChecklist(wetmillId),
         getTrainingAttendanceByTopic: async (_, { wetmillId }) => getTrainingAttendanceByTopic(wetmillId),
         getTrainingAttendanceOverall: async (_, { wetmillId }) => getTrainingAttendanceOverall(wetmillId),
+        getKpiStats: async (_, { wetmillId }) => {
+            try {
+                const { cherry, total } = await getKpiStats(wetmillId);
+                return { cherry, total };
+            } catch (err) {
+                throw new Error("Failed to fetch KPI stats");
+            }
+        },
+        getParchmentDistribution: async (_, { wetmillId }) => {
+            try {
+                return await getParchmentDistribution(wetmillId);
+            } catch (err) {
+                throw new Error("Failed to fetch KPI stats");
+            }
+        },
 
     },
 };
