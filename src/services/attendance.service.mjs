@@ -32,7 +32,7 @@ export const AttendanceService = {
         records = records.concat(result.records);
       }
 
-      if (records.length > 0) {
+      if (records.length > 30000) {
         await redis.set(cacheKey, JSON.stringify(records), "EX", 3600 * 8);
         console.log(`Attendance data for project ${projectId} cached`);
       }

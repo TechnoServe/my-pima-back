@@ -9,7 +9,7 @@ const REQUIRED_DOCS = [
     "Registration license",
     "Tax number",
     "Production or operational license for current year",
-    "Export license/number,",
+    "Export license/number",
 ];
 
 export async function getMissingDocuments(wetmillId) {

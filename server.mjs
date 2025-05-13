@@ -78,7 +78,7 @@ app.use(function (req, res, next) {
 const redis = new Redis({
   host: "127.0.0.1", // localhost
   port: 6379, // default Redis port
-  retryStrategy: (times) => Math.min(times * 50, 2000), // retry connection if it fails
+  retryStrategy: (times) => Math.min(times * 2, 2000), // retry connection if it fails
 });
 
 dotenv.config();
