@@ -1,6 +1,7 @@
 import { DataTypes } from "sequelize";
 import sequelize from "../config/db.mjs";
 import Roles from "./roles.model.mjs";
+import WetmillVisit from "./wetmill_visits.model.mjs";
 
 const Users = sequelize.define("tbl_users", {
   user_id: {
@@ -58,6 +59,16 @@ Roles.hasMany(Users, {
 
 Users.belongsTo(Roles, {
   foreignKey: "role_id",
+});
+
+Users.hasMany(WetmillVisit, {
+  foreignKey: "user_id",
+  as: "wetmill_visits",
+});
+
+WetmillVisit.belongsTo(Users, {
+  foreignKey: "user_id",
+  as: "user",
 });
 
 export default Users;

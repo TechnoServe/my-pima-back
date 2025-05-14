@@ -1,5 +1,6 @@
 import { DataTypes } from "sequelize";
 import sequelize from "../config/db.mjs";
+import WetmillVisit from "./wetmill_visits.model.mjs";
 
 const Wetmills = sequelize.define(
   "wetmills",
@@ -80,5 +81,15 @@ const Wetmills = sequelize.define(
     timestamps: false, 
   }
 );
+
+Wetmills.hasMany(WetmillVisit, {
+  foreignKey: "wetmill_id",
+  as: "wetmill_visits",
+});
+
+WetmillVisit.belongsTo(Wetmills, {
+  foreignKey: "wetmill_id",
+  as: "wetmill",
+});
 
 export default Wetmills;

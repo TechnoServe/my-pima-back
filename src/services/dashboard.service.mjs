@@ -39,7 +39,9 @@ export async function getMissingDocuments(wetmillId) {
         ],
     });
 
-    console.log("Document Rows:", rows.map((r) => r.toJSON()));
+    if (!rows || !rows.length) {
+        return []; // survey not found or no documents reported
+    }
 
     // 2) Extract the list of available docs
     const availableDocs = rows.map((r) => r.value_text);
@@ -132,6 +134,14 @@ export async function getInfrastructureChecklist(wetmillId) {
     const goodItems = goodRows.map((r) => r.value_text);
     const repairItems = repairRows.map((r) => r.value_text);
 
+    if (goodItems.length === 0 && repairItems.length === 0) {
+        return {
+            items: [],
+            goodItems: [],
+            repairItems: [],
+        };
+    }
+
     return {
         items: INFRA_ITEMS,
         goodItems,
@@ -213,14 +223,11 @@ export async function getEmployeeStats(wetmillId) {
         order: [["created_at", "DESC"]],
         attributes: ["id"],
     });
-    if (!latest) {
-        return {
-            menOwnership: 0, womenOwnership: 0,
-            menFarmers: 0, womenFarmers: 0,
-            menPermanent: 0, womenPermanent: 0,
-            menTemporary: 0, womenTemporary: 0,
-            menDaily: 0, womenDaily: 0,
-        };
+
+
+    if (latest === "null" || latest === null || latest === undefined) {
+        console.log("Latest Employee Survey:", latest);
+        return { data: 0 }; // no survey found
     }
 
     // 2) pull all relevant question responses
@@ -245,11 +252,17 @@ export async function getEmployeeStats(wetmillId) {
         },
     });
 
+    if (!rows || !rows.length) {
+        return {}; // no survey or no relevant responses
+    }
+
     // 3) map into fields
     const m = {};
     rows.forEach(r => {
         m[r.question_name] = Number(r.value_number) || 0;
     });
+
+    console.log("Employee Stats:", m);
 
     return {
         menOwnership: m.number_of_men_in_ownership || 0,
@@ -262,6 +275,7 @@ export async function getEmployeeStats(wetmillId) {
         womenTemporary: m.number_of_temporary_employees_at_peak_time_women || 0,
         menDaily: m.number_of_daily_workers_men || 0,
         womenDaily: m.number_of_daily_workers_women || 0,
+        data: rows.length
     };
 }
 

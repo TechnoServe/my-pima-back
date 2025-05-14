@@ -1,7 +1,11 @@
+// src/resolvers/wetmills.resolvers.mjs
+
 import ExcelJS from "exceljs";
 import Wetmills from "../models/wetmills.model.mjs";
 import SurveyResponse from "../models/survey_response.model.mjs";
 import SurveyQuestionResponse from "../models/survey_question_response.model.mjs";
+import WetmillVisit from "../models/wetmill_visits.model.mjs";
+import Users from "../models/users.model.mjs";
 
 const ALLOWED_SURVEYS = [
   "manager_needs_assessment",
@@ -37,51 +41,77 @@ const WetmillsResolvers = {
         };
       }
     },
+
     exportWetMillsDataExcel: async () => {
       // 1. Create a new workbook
       const workbook = new ExcelJS.Workbook();
 
       // 2. For each survey type, fetch responses and build a sheet
       for (const surveyType of ALLOWED_SURVEYS) {
-        // Fetch all responses of this type, including their question_responses
         const responses = await SurveyResponse.findAll({
           where: { survey_type: surveyType },
-          include: [{ model: SurveyQuestionResponse, as: "question_responses" }],
+          include: [
+            { model: SurveyQuestionResponse, as: "question_responses" },
+            {
+              model: WetmillVisit,
+              attributes: ["visit_date"],
+              as: "wetmill_visit",
+              include: [
+                { model: Wetmills, as: "wetmill", attributes: ["name"] },
+                { model: Users, as: "user", attributes: ["user_name"] },
+              ],
+            },
+          ],
         });
 
         // Gather all distinct question names to form columns
         const questionNames = new Set();
         responses.forEach((r) =>
-          r.question_responses.forEach((q) => questionNames.add(q.question_name))
+          r.question_responses.forEach((q) =>
+            questionNames.add(q.question_name)
+          )
         );
 
         // Create worksheet named after the survey
         const sheet = workbook.addWorksheet(surveyType);
 
-        // Define columns: static fields + one column per question
-        const columns = [
-          { header: "Survey ID",         key: "id",              width: 36 },
-          { header: "Visit ID",          key: "form_visit_id",   width: 36 },
-          { header: "Completed Date",    key: "completed_date",  width: 24 },
-          { header: "General Feedback",  key: "general_feedback",width: 40 },
-          // Spread in question columns
-          ...[...questionNames].map((qn) => ({ header: qn, key: qn, width: 20 })),
+        // Define columns: new static fields + existing + per-question columns
+        sheet.columns = [
+          { header: "Wetmill Name",     key: "wetmill_name",     width: 30 },
+          // { header: "Form Name",        key: "form_name",        width: 20 },
+          { header: "Visit Date",       key: "visit_date",       width: 24 },
+          { header: "Submitted By",     key: "submitted_by",     width: 25 },
+          // { header: "Survey ID",        key: "id",               width: 36 },
+          // { header: "Visit ID",         key: "form_visit_id",    width: 36 },
+          { header: "Completed Date",   key: "completed_date",   width: 24 },
+          { header: "General Feedback", key: "general_feedback", width: 40 },
+          ...[...questionNames].map((qn) => ({
+            header: qn,
+            key: qn,
+            width: 20,
+          })),
         ];
-        sheet.columns = columns;
 
         // Populate rows
         for (const r of responses) {
-          // Base row data
+          console.log("Processing response:", r);
+          const visit = r.wetmill_visit || {};
           const row = {
-            id:             r.id,
-            form_visit_id:  r.form_visit_id,
-            completed_date: r.completed_date
-              ? r.completed_date.toISOString()
-              : "",
+            wetmill_name:     visit.wetmill?.name || "",
+            form_name:        surveyType,
+            visit_date:       visit.visit_date
+                                 ? visit.visit_date.toISOString()
+                                 : "",
+            submitted_by:     visit.user?.username || "",
+            survey_type:      r.survey_type,
+            id:               r.id,
+            form_visit_id:    r.form_visit_id,
+            completed_date:   r.completed_date
+                                 ? r.completed_date.toISOString()
+                                 : "",
             general_feedback: r.general_feedback || "",
           };
 
-          // Add each question’s value to the row
           r.question_responses.forEach((q) => {
             let val = null;
             if (q.value_text    != null) val = q.value_text;

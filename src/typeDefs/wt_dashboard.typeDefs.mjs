@@ -27,16 +27,17 @@ const dashboardTypeDefs = gql`
   }
 
   type EmployeeStats {
-    menOwnership: Int!
-    womenOwnership: Int!
-    menFarmers: Int!
-    womenFarmers: Int!
-    menPermanent: Int!
-    womenPermanent: Int!
-    menTemporary: Int!
-    womenTemporary: Int!
-    menDaily: Int!
-    womenDaily: Int!
+    menOwnership: Int
+    womenOwnership: Int
+    menFarmers: Int
+    womenFarmers: Int
+    menPermanent: Int
+    womenPermanent: Int
+    menTemporary: Int
+    womenTemporary: Int
+    menDaily: Int
+    womenDaily: Int
+    data: Int
   }
 
   #############################
@@ -93,7 +94,7 @@ const dashboardTypeDefs = gql`
     getMissingDocuments(wetmillId: ID!): [String!]!
     getInfrastructureChecklist(wetmillId: ID!): InfrastructureChecklist!
     getFinancialBreakdown(wetmillId: ID!): FinancialBreakdown!
-    getEmployeeStats(wetmillId: ID!): EmployeeStats!
+    getEmployeeStats(wetmillId: ID!): EmployeeStats
     getCpqiStats(wetmillId: ID!): CPQIStats!
     getCpqiChecklist(wetmillId: ID!): [CPQISectionChecklist!]!
     getTrainingAttendanceByTopic(wetmillId: ID!): [TrainingTopicAttendance!]!

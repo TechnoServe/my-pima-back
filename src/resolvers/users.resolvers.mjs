@@ -197,8 +197,6 @@ const UsersResolvers = {
           };
         }
 
-        console.log("Project:", project.toJSON());
-
         // 2. Fetch all project-role links for that project, including the user
         const roleLinks = await ProjectRole.findAll({
           where: { project_id: project.project_id },
@@ -209,8 +207,6 @@ const UsersResolvers = {
             },
           ],
         });
-
-        console.log("Role Links:", roleLinks.map((link) => link.toJSON()));
 
         // 3. Map into the exact shape your front end expects
         const advisors = roleLinks.map((link) => ({
