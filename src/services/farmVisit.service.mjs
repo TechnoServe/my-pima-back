@@ -673,18 +673,18 @@ const getProjectsToSample = async () => {
       sampleSize: 1,
       project_country: "Kenya",
     },
-    {
-      sf_project_id: "a0EOj000002C7ivMAC",
-      sampleAll: true,
-      sampleSize: null,
-      project_country: "Burundi",
-    },
-    {
-      sf_project_id: "a0EOj000002FMGnMAO",
-      sampleAll: true,
-      sampleSize: null,
-      project_country: "Burundi",
-    },
+    // {
+    //   sf_project_id: "a0EOj000002C7ivMAC",
+    //   sampleAll: true,
+    //   sampleSize: null,
+    //   project_country: "Burundi",
+    // },
+    // {
+    //   sf_project_id: "a0EOj000002FMGnMAO",
+    //   sampleAll: true,
+    //   sampleSize: null,
+    //   project_country: "Burundi",
+    // },
   ];
 };
 

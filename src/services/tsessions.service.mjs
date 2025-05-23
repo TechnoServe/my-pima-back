@@ -24,7 +24,7 @@ export const TSessionService = {
 
       // 1. load all active projects
       const projects = await Projects.findAll({
-        where: { status: "active" },
+        where: { project_status: "active" },
       });
 
       const lastMonday = getWeekRange(1).startOfWeek;
@@ -259,8 +259,6 @@ const saveTrainingSessions = async (sessions, sf_project_id) => {
       await transaction.commit();
       return;
     }
-
-    console.log("new sessions", newSessions);
 
     for (let i = 0; i < newSessions.length; i += 100) {
       const batch = sessions.slice(i, i + 100);
