@@ -53,7 +53,7 @@ export const AttendanceService = {
       const projectIds = ["a0EOj000002RJS1MAO", "a0EOj000000VN5BMAW"];
 
       for (let projectId of projectIds) {
-        await this.fetchAndCacheAttendance(projectId, sf_conn);
+        // await this.fetchAndCacheAttendance(projectId, sf_conn);
       }
 
       console.log("Attendance data cached successfully.");
