@@ -12,14 +12,21 @@ const sequelize = new Sequelize(
     dialect: "postgres",
     protocol: "postgres",
     dialectOptions: {
-      // ssl: {
-      //   require: true,
-      //   rejectUnauthorized: false,
-      // },
+      // turn SSL on if your environment needs it
       ssl: false,
       native: true,
     },
-    logging: false
+    logging: false,
+
+    // ↑↑↑ your existing options ↑↑↑
+
+    // ↓↓↓ new pool settings ↓↓↓
+    pool: {
+      max: 20,       // allow up to 20 concurrent connections
+      min: 0,
+      acquire: 600000,  // wait up to 10 minutes for a free connection
+      idle: 10000       // release idle connections after 10 seconds
+    },
   }
 );
 

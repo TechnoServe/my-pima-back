@@ -18,6 +18,7 @@ import { MailService } from "./mail.service.mjs";
 import Users from "../models/users.model.mjs";
 import Roles from "../models/roles.model.mjs";
 import { getWeekRange } from "../utils/date.utils.mjs";
+import pLimit from "p-limit";
 
 const BATCH_SIZE = 100;
 
@@ -119,43 +120,46 @@ export const FarmVisitService = {
 
       logger.info(`Found ${projects.length} projects to sample.`);
 
-      // Process projects in parallel for efficiency
+      // limit to 5 concurrent project‐sampling tasks
+      const limit = pLimit(5);
+
       await Promise.all(
-        projects.map(async (project) => {
-          try {
-            const lastMonday = moment()
-              .subtract(1, "weeks")
-              .startOf("isoWeek")
-              .format("YYYY-MM-DD");
-            const lastSunday = moment()
-              .subtract(1, "weeks")
-              .endOf("isoWeek")
-              .format("YYYY-MM-DD");
-            const farmerTrainers = await fetchFTsFromSalesforceByPId(
-              sf_conn,
-              project.sf_project_id
-            );
+        projects.map(project =>
+          limit(async () => {
+            try {
+              const lastMonday = moment()
+                .subtract(1, "weeks")
+                .startOf("isoWeek")
+                .format("YYYY-MM-DD");
+              const lastSunday = moment()
+                .subtract(1, "weeks")
+                .endOf("isoWeek")
+                .format("YYYY-MM-DD");
+              const farmerTrainers = await fetchFTsFromSalesforceByPId(
+                sf_conn,
+                project.sf_project_id
+              );
 
-            // Check if project has been sampled already last week
-            logger.info(
-              `Processing project ${project.sf_project_id} with ${farmerTrainers.length} Farmer Trainers.`
-            );
+              logger.info(
+                `Processing project ${project.sf_project_id} with ${farmerTrainers.length} Farmer Trainers.`
+              );
 
-            for (const trainer of farmerTrainers) {
-              const recordsFound = await FarmVisitRepository.count({
-                sf_project_id: project.sf_project_id,
-                farmer_trainer: trainer.Staff__r.Name,
-                date_visited: {
-                  [Op.between]: [lastMonday, lastSunday],
-                },
-              });
+              for (const trainer of farmerTrainers) {
+                const recordsFound = await FarmVisitRepository.count({
+                  sf_project_id: project.sf_project_id,
+                  farmer_trainer: trainer.Staff__r.Name,
+                  date_visited: {
+                    [Op.between]: [lastMonday, lastSunday],
+                  },
+                });
 
-              // If FT already sampled. Skip them.
-              if (recordsFound > 0) {
-                logger.info(
-                  `Skipping processing for FT: ${trainer.Staff__r.Name}.`
-                );
-              } else {
+                if (recordsFound > 0) {
+                  logger.info(
+                    `Skipping processing for FT: ${trainer.Staff__r.Name}.`
+                  );
+                  continue;
+                }
+
                 const farmVisits = await fetchFarmVisitsFromSalesforce(
                   sf_conn,
                   trainer.Staff__c,
@@ -183,19 +187,19 @@ export const FarmVisitService = {
                     date_visited: visit.Farm_Visit__r.Date_Visited__c,
                     farmer_trainer: visit.Farm_Visit__r.Farmer_Trainer__r.Name,
                     date_sampled: new Date(),
-                    bestPractices: bestPractices,
+                    bestPractices,
                   };
                 });
 
                 await saveFarmVisitSamplesInBatches(visitsToSave);
               }
+            } catch (error) {
+              logger.error(
+                `Error processing project ${project.sf_project_id}: ${error.message}`
+              );
             }
-          } catch (error) {
-            logger.error(
-              `Error processing project ${project.sf_project_id}: ${error.message}`
-            );
-          }
-        })
+          })
+        )
       );
 
       logger.info("Farm visit sampling process completed successfully.");
@@ -203,6 +207,7 @@ export const FarmVisitService = {
       logger.error(`Error during farm visit sampling: ${error.message}`);
     }
   },
+
 
   async getSampledVisitsStats(projectId) {
     const startOfLastWeek = moment()
@@ -580,7 +585,7 @@ const extractBestPracticesFromVisit = (bpFieldMapping, visit) => {
         bestPractices.push(record);
       }
 
-      if(record.practice_name == record.practice_name == "Compost BU"){
+      if (record.practice_name == record.practice_name == "Compost BU") {
         bestPractices.push(record);
       }
     }

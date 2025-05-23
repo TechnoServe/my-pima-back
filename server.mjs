@@ -122,11 +122,15 @@ conn.login(
   }
 );
 
-app.get("/api/sampling", async (req, res) => {
-  await FarmVisitService.sampleFarmVisits(conn);
-  await TSessionService.sampleTSForApprovals(conn);
-  res.send("Hello, My PIMA API Service!");
+app.get("/api/sampling", (req, res) => {
+  // kick off both jobs but don't await
+  FarmVisitService.sampleFarmVisits(conn).catch(err => logger.error(err));
+  TSessionService.sampleTSForApprovals(conn).catch(err => logger.error(err));
+
+  // respond at once
+  res.json({ success: true, message: "Sampling started" });
 });
+
 
 app.get("/api/mail", async (req, res) => {
   await FarmVisitService.sendRemainderEmail();

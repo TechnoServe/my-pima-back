@@ -14,100 +14,115 @@ import { getWeekRange } from "../utils/date.utils.mjs";
 import Users from "../models/users.model.mjs";
 import ProjectRole from "../models/project_role.model.mjs";
 import { MailService } from "./mail.service.mjs";
+import pLimit from "p-limit";
 
 export const TSessionService = {
   // Method to sample from SF which training sessions to be approved by the MEL team
   async sampleTSForApprovals(sf_conn) {
     try {
       logger.info("Started training session sampling process.");
+
+      // 1. load all active projects
       const projects = await Projects.findAll({
-        status: "active",
-        //project_country: { [Op.not]: null },
+        where: { status: "active" },
       });
 
       const lastMonday = getWeekRange(1).startOfWeek;
       const lastSunday = getWeekRange(1).endOfWeek;
 
+      // 2. set up a limiter of 10 concurrent project‐jobs
+      const limit = pLimit(10);
+
       await Promise.all(
-        projects.map(async (project) => {
-          try {
-            let sampleSize = 10;
+        projects.map((project) =>
+          limit(async () => {
+            try {
+              let sampleSize = 10;
 
-            // If Kenya and Ethiopia sample by FTs
-            if (
-              ["Ethiopia", "Kenya", "Burundi"].includes(project.project_country)
-            ) {
-              const farmerTrainers = await fetchFTsFromSalesforceByPId(
-                sf_conn,
-                project.sf_project_id
-              );
+              // If Kenya, Ethiopia or Burundi: sample per FT
+              if (
+                ["Ethiopia", "Kenya", "Burundi"].includes(
+                  project.project_country
+                )
+              ) {
+                const farmerTrainers =
+                  await fetchFTsFromSalesforceByPId(
+                    sf_conn,
+                    project.sf_project_id
+                  );
 
-              for (const trainer of farmerTrainers) {
-                // Check if we already sampled for current FT
+                for (const trainer of farmerTrainers) {
+                  const ftSamples = await TsSampleRepository.count({
+                    sf_project_id: project.sf_project_id,
+                    farmer_trainer_name: trainer.Staff__r.Name,
+                    session_date: {
+                      [Op.between]: [lastMonday, lastSunday],
+                    },
+                  });
+
+                  if (ftSamples > 0) {
+                    logger.info(
+                      `Skipping FT ${trainer.Staff__r.Name} (already sampled).`
+                    );
+                  } else {
+                    const tSessions = await fetchRandomTSByFt(
+                      sf_conn,
+                      project.sf_project_id,
+                      trainer.Staff__c,
+                      lastMonday,
+                      lastSunday,
+                      3
+                    );
+                    await saveTrainingSessions(
+                      tSessions,
+                      project.sf_project_id
+                    );
+                  }
+                }
+              } else {
+                // Otherwise sample by percentage for the whole project
                 const ftSamples = await TsSampleRepository.count({
                   sf_project_id: project.sf_project_id,
-                  farmer_trainer_name: trainer.Staff__r.Name,
                   session_date: {
                     [Op.between]: [lastMonday, lastSunday],
                   },
                 });
 
-                // Don't sample for FT if they already have a sampled record
                 if (ftSamples > 0) {
                   logger.info(
-                    `Skipping processing for FT: ${trainer.Staff__r.Name}.`
+                    `Skipping project ${project.sf_project_id} (already sampled).`
                   );
                 } else {
-                  const tSessions = await fetchRandomTSByFt(
+                  logger.info(
+                    `Processing project ${project.sf_project_id}.`
+                  );
+                  const tSessions = await fetchRandomTSByPId(
                     sf_conn,
                     project.sf_project_id,
-                    trainer.Staff__c,
+                    sampleSize,
                     lastMonday,
-                    lastSunday,
-                    3
+                    lastSunday
                   );
-
-                  await saveTrainingSessions(tSessions, project.sf_project_id);
+                  await saveTrainingSessions(
+                    tSessions,
+                    project.sf_project_id
+                  );
                 }
               }
-            } else {
-              // Here we sample by percentage
-
-              const ftSamples = await TsSampleRepository.count({
-                sf_project_id: project.sf_project_id,
-                session_date: {
-                  [Op.between]: [lastMonday, lastSunday],
-                },
-              });
-
-              // Don't sample for Project if they already have a sampled record
-              if (ftSamples > 0) {
-                logger.info(
-                  `Skipping processing for Project: ${project.sf_project_id}.`
-                );
-              } else {
-                console.log(
-                  `processing fpr project with ID ${project.sf_project_id}`
-                );
-                const tSessions = await fetchRandomTSByPId(
-                  sf_conn,
-                  project.sf_project_id,
-                  sampleSize,
-                  lastMonday,
-                  lastSunday
-                );
-
-                await saveTrainingSessions(tSessions, project.sf_project_id);
-              }
+            } catch (error) {
+              logger.error(
+                `Error processing project ${project.project_id}: ${error.message}`
+              );
             }
-          } catch (error) {
-            console.log(error);
-            logger.error(`Error processing project: ${project.project_id}`);
-          }
-        })
+          })
+        )
       );
+
+      logger.info("Training session sampling process completed successfully.");
     } catch (error) {
-      logger.error(`Error during training session sampling: ${error.message}`);
+      logger.error(
+        `Error during training session sampling: ${error.message}`
+      );
     }
   },
 
