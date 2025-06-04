@@ -25,6 +25,9 @@ const WetmillsResolvers = {
       try {
         const wetmills = await Wetmills.findAll({
           order: [["created_at", "DESC"]],
+          where: {
+            country: "Burundi",
+          }
         });
 
         return {
