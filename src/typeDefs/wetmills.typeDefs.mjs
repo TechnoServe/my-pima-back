@@ -35,8 +35,8 @@ const wetmillsTypeDefs = gql`
 
 
   extend type Query {
-    getWetmills: WetmillsResponse
-    exportWetMillsDataExcel: SurveyExcel!
+    getWetmills(program: String!): WetmillsResponse
+    exportWetMillsDataExcel(program: String!): SurveyExcel!
   }
 `;
 

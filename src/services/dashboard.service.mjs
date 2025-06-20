@@ -281,7 +281,7 @@ export async function getEmployeeStats(wetmillId) {
 
 export async function getCpqiStats(wetmillId) {
     // 1) find latest CPQI survey for this wetmill
-    const latest = await SurveyResponse.findOne({
+    const cpqiSurveys = await SurveyResponse.findAll({
         where: { survey_type: "cpqi" },
         include: [{
             model: WetmillVisit,
@@ -296,34 +296,49 @@ export async function getCpqiStats(wetmillId) {
 
     // 2) fetch all question responses for that survey
     const rows = await SurveyQuestionResponse.findAll({
-        where: { survey_response_id: latest.id, section_name: { [Op.ne]: null } },
-        attributes: ["section_name", "value_text"],
+        where: {  section_name: { [Op.ne]: null }, survey_response_id: cpqiSurveys.map(s => s.id) },
+        attributes: ["section_name", "question_name", "value_text"],
     });
+
+    const uniqueQuestionCount = new Set(rows.map(r => r.question_name)).size;
+
+    const totalScore = rows.reduce((acc, r) => {
+        const val = (r.value_text || "").toLowerCase() === "yes" ? 1 : 0;  
+        return acc + val;
+    }, 0);
+
+    console.log("Total Score:", totalScore, "Unique Questions:", uniqueQuestionCount);
+
+
+
+
 
     // 3) aggregate counts
-    const bySection = {};
-    let yesTotal = 0, countTotal = 0;
-    rows.forEach(r => {
-        const sec = r.section_name;
-        const val = (r.value_text || "").toLowerCase() === "yes" ? 1 : 0;
-        bySection[sec] = bySection[sec] || { yes: 0, count: 0 };
-        bySection[sec].yes += val;
-        bySection[sec].count += 1;
-        yesTotal += val;
-        countTotal += 1;
+    // const bySection = {};
+    // let yesTotal = 0, countTotal = 0;
+    // rows.forEach(r => {
+    //     const sec = r.section_name;
+    //     const val = (r.value_text || "").toLowerCase() === "yes" ? 1 : 0;
+    //     bySection[sec] = bySection[sec] || { yes: 0, count: 0 };
+    //     bySection[sec].yes += val;
+    //     bySection[sec].count += 1;
+    //     yesTotal += val;
+    //     countTotal += 1;
 
-    });
+    // });
 
     // 4) build section array
-    const sections = Object.entries(bySection).map(([sectionName, { yes, count }]) => ({
-        sectionName,
-        yesPct: (yes / count) * 100,
-        noPct: ((count - yes) / count) * 100,
-    }));
+    // const sections = Object.entries(bySection).map(([sectionName, { yes, count }]) => ({
+    //     sectionName,
+    //     yesPct: (yes / count) * 100,
+    //     noPct: ((count - yes) / count) * 100,
+    // }));
 
     // 5) overall percentages
-    const overallYesPct = countTotal ? (yesTotal / countTotal) * 100 : 0;
-    const overallNoPct = countTotal ? 100 - overallYesPct : 0;
+    // const overallYesPct = countTotal ? (yesTotal / countTotal) * 100 : 0;
+    // const overallNoPct = countTotal ? 100 - overallYesPct : 0;
+
+    return {}
 
     return { sections, overallYesPct, overallNoPct };
 }

@@ -6,6 +6,7 @@ import SurveyResponse from "../models/survey_response.model.mjs";
 import SurveyQuestionResponse from "../models/survey_question_response.model.mjs";
 import WetmillVisit from "../models/wetmill_visits.model.mjs";
 import Users from "../models/users.model.mjs";
+import { Op } from "sequelize";
 
 const ALLOWED_SURVEYS = [
   "manager_needs_assessment",
@@ -21,12 +22,13 @@ const ALLOWED_SURVEYS = [
 
 const WetmillsResolvers = {
   Query: {
-    getWetmills: async () => {
+    getWetmills: async (_, { program }) => {
       try {
+
         const wetmills = await Wetmills.findAll({
           order: [["created_at", "DESC"]],
           where: {
-            country: "Burundi",
+            programme: program,
           }
         });
 
@@ -45,7 +47,7 @@ const WetmillsResolvers = {
       }
     },
 
-    exportWetMillsDataExcel: async () => {
+    exportWetMillsDataExcel: async (_, { program }) => {
       // 1. Create a new workbook
       const workbook = new ExcelJS.Workbook();
 
@@ -59,8 +61,9 @@ const WetmillsResolvers = {
               model: WetmillVisit,
               attributes: ["visit_date"],
               as: "wetmill_visit",
+              where: { user_id: { [Op.ne]: null } },
               include: [
-                { model: Wetmills, as: "wetmill", attributes: ["name"] },
+                { model: Wetmills, as: "wetmill", attributes: ["name"], where: { programme: program } },
                 { model: Users, as: "user", attributes: ["user_name"] },
               ],
             },
@@ -80,13 +83,13 @@ const WetmillsResolvers = {
 
         // Define columns: new static fields + existing + per-question columns
         sheet.columns = [
-          { header: "Wetmill Name",     key: "wetmill_name",     width: 30 },
+          { header: "Wetmill Name", key: "wetmill_name", width: 30 },
           // { header: "Form Name",        key: "form_name",        width: 20 },
-          { header: "Visit Date",       key: "visit_date",       width: 24 },
-          { header: "Submitted By",     key: "submitted_by",     width: 25 },
+          { header: "Visit Date", key: "visit_date", width: 24 },
+          { header: "Submitted By", key: "submitted_by", width: 25 },
           // { header: "Survey ID",        key: "id",               width: 36 },
           // { header: "Visit ID",         key: "form_visit_id",    width: 36 },
-          { header: "Completed Date",   key: "completed_date",   width: 24 },
+          { header: "Completed Date", key: "completed_date", width: 24 },
           { header: "General Feedback", key: "general_feedback", width: 40 },
           ...[...questionNames].map((qn) => ({
             header: qn,
@@ -97,32 +100,32 @@ const WetmillsResolvers = {
 
         // Populate rows
         for (const r of responses) {
-          console.log("Processing response:", r);
           const visit = r.wetmill_visit || {};
+
           const row = {
-            wetmill_name:     visit.wetmill?.name || "",
-            form_name:        surveyType,
-            visit_date:       visit.visit_date
-                                 ? visit.visit_date.toISOString()
-                                 : "",
-            submitted_by:     visit.user?.username || "",
-            survey_type:      r.survey_type,
-            id:               r.id,
-            form_visit_id:    r.form_visit_id,
-            completed_date:   r.completed_date
-                                 ? r.completed_date.toISOString()
-                                 : "",
+            wetmill_name: visit.wetmill?.name || "",
+            form_name: surveyType,
+            visit_date: visit.visit_date
+              ? visit.visit_date.toISOString()
+              : "",
+            submitted_by: visit.user?.user_name || "",
+            survey_type: r.survey_type,
+            id: r.id,
+            form_visit_id: r.form_visit_id,
+            completed_date: r.completed_date
+              ? r.completed_date.toISOString()
+              : "",
             general_feedback: r.general_feedback || "",
           };
 
           r.question_responses.forEach((q) => {
             let val = null;
-            if (q.value_text    != null) val = q.value_text;
-            if (q.value_number  != null) val = q.value_number;
+            if (q.value_text != null) val = q.value_text;
+            if (q.value_number != null) val = q.value_number;
             if (q.value_boolean != null) val = q.value_boolean;
-            if (q.value_date    != null)
+            if (q.value_date != null)
               val = new Date(q.value_date).toISOString();
-            if (q.value_gps     != null)
+            if (q.value_gps != null)
               val = JSON.stringify(q.value_gps);
 
             row[q.question_name] = val;

@@ -28,6 +28,10 @@ const Wetmills = sequelize.define(
     exporting_status: {
       type: DataTypes.STRING,
     },
+    programme: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
     country: {
       type: DataTypes.STRING,
     },
@@ -78,7 +82,7 @@ const Wetmills = sequelize.define(
     },
   },
   {
-    timestamps: false, 
+    timestamps: false,
   }
 );
 

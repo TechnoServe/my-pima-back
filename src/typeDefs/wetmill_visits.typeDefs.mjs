@@ -15,7 +15,7 @@ const WetMillvisitsTypeDefs = gql`
   }
 
   extend type Query {
-    getVisits: VisitsResponse
+    getVisits(program: String!): VisitsResponse
   }
 `;
 

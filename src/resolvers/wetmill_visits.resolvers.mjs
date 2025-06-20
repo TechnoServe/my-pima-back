@@ -1,12 +1,22 @@
 // graphql/resolvers/visits.resolvers.mjs
 import WetmillVisit from "../models/wetmill_visits.model.mjs";
+import Wetmills from "../models/wetmills.model.mjs";
 
 const WetMillVisitsResolvers = {
   Query: {
-    getVisits: async () => {
+    getVisits: async (_, { program }) => {
       try {
         // fetch raw visits
         const visitsRaw = await WetmillVisit.findAll({
+          include: [{
+            model: Wetmills,
+            as: "wetmill",
+            attributes: ["id", "wet_mill_unique_id", "name"],
+            // required: true, 
+            where: {
+              programme: program,
+            },
+          }],
           order: [["visit_date", "DESC"]],
         });
 
