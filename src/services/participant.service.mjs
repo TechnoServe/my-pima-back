@@ -32,6 +32,12 @@ export const ParticipantsService = {
         return response;
       }
 
+      let addInactiveFamers = "";
+
+      if (!project.sf_project_id === "a0EOj000003TZQTMA4") {
+        addInactiveFamers = " AND Status__c = 'Inactive'";
+      }
+
       // Fetch participants from Salesforce
       let participants = [];
       let result = await conn.query(`
@@ -43,7 +49,8 @@ export const ParticipantsService = {
           Phone_Number__c, Number_of_Coffee_Plots__c, Household__r.Number_of_Coffee_Plots__c, 
           Training_Group__r.Location__r.Name, Training_Group__r.Project__r.Project_Country__c
         FROM Participant__c 
-        WHERE Project__c = '${project.project_name}' AND Status__c = 'Active' 
+        WHERE Project__c = '${project.project_name}' AND Status__c = 'Active'
+          ${addInactiveFamers} 
         ORDER BY TNS_Id__c Asc, Household__r.Name Asc
       `);
 
