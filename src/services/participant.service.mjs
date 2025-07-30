@@ -35,7 +35,7 @@ export const ParticipantsService = {
       let addInactiveFamers = "";
 
       if (!project.sf_project_id === "a0EOj000003TZQTMA4") {
-        addInactiveFamers = " AND Status__c = 'Inactive'";
+        addInactiveFamers = " OR Status__c = 'Inactive'";
       }
 
       // Fetch participants from Salesforce
