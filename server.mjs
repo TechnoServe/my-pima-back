@@ -66,6 +66,7 @@ import { listJobs } from "./src/utils/syncProgress.mjs";
 import {
   runOutboxForProject,
   runPartSyncCrons,
+  runSequentialOutboxPush
 } from "./src/cron-jobs/stagedSync.mjs";
 
 const app = express();
@@ -372,6 +373,70 @@ app.get("/api/sync/participantsToSalesforce", async (req, res) => {
     });
   }
 });
+
+app.post("/api/outbox/retry", async (_req, res) => {
+  try {
+    const statuses = ["failed", "dead"];
+    const QUEUE = {
+      households: HouseholdOutbox,
+      participants: ParticipantOutbox,
+      attendance: AttendanceOutbox,
+    };
+
+    // Collect projects that currently have failed/dead rows
+    const projects = new Set();
+    for (const Model of Object.values(QUEUE)) {
+      const rows = await Model.findAll({
+        attributes: ["projectId"],
+        where: { status: { [Op.in]: statuses } },
+        group: ["projectId"],
+        raw: true,
+      });
+      rows.forEach((r) => r.projectId && projects.add(r.projectId));
+    }
+
+    if (projects.size === 0) {
+      return res.json({ status: 200, message: "Nothing to retry." });
+    }
+
+    // Flip ALL failed/dead to pending (across all projects/queues)
+    const now = new Date();
+    for (const Model of Object.values(QUEUE)) {
+      await Model.update(
+        { status: "pending", nextAttemptAt: now },
+        { where: { status: { [Op.in]: statuses } } }
+      );
+    }
+
+    // Kick the sequential pusher per affected project.
+    for (const projectId of projects) {
+      // Reuse an active run if one exists; otherwise create a new one.
+      // const existingRun = await UploadRun.findOne({
+      //   where: { projectId, status: "running" },
+      //   order: [["createdAt", "DESC"]],
+      // });
+
+      // const run =
+      //   existingRun ||
+      //   (await UploadRun.create({
+      //     projectId,
+      //     status: "running",
+      //     meta: { source: "manual-retry" },
+      //   }));
+
+      // Fire-and-forget; progress is reported by your existing progress API
+      runSequentialOutboxPush(projectId, sf_conn, { runId: run.id }).catch(
+        (e) => console.error(`[manual-retry] runner error ${projectId}:`, e)
+      );
+    }
+
+    res.json({ status: 200, message: "Retry triggered." });
+  } catch (err) {
+    console.error("[POST /api/outbox/retry]", err);
+    res.status(500).json({ error: "Retry failed." });
+  }
+});
+
 
 // server.mjs (add near your other imports)
 import { Op } from "sequelize";

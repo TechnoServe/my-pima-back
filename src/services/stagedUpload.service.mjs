@@ -133,6 +133,15 @@ function formatHouseholds(header, rows) {
       continue;
     }
 
+    // check if same household have different salesforce Ids
+    if (primary && secondary && primary.Household__c !== secondary.Household__c) {
+      errors.push({
+        row: "-",
+        msg: `Household ${key} has conflicting Salesforce Ids`,
+      });
+      continue;
+    }
+
     const m = primary || secondary; // carry core fields from any row
     households.push({
       ffg_id: m.ffg_id,
