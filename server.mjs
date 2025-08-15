@@ -1,4 +1,4 @@
-import express from "express";
+import express, { application } from "express";
 import path from "path";
 import dotenv from "dotenv";
 import jsforce from "jsforce";
@@ -53,12 +53,20 @@ import DashboardResolvers from "./src/resolvers/wt_dashboard.resolvers.mjs";
 import axios from "axios";
 import "./src/cron-jobs/attendance.cron.mjs";
 import "./src/cron-jobs/farmVisit.cron.mjs";
-import { ParticipantsService } from "./src/services/participant.service.mjs";
+import "./src/cron-jobs/syncParticipants.mjs";
+
 import logger from "./src/config/logger.mjs";
 import Projects from "./src/models/projects.models.mjs";
 import { TSessionService } from "./src/services/tsessions.service.mjs";
 import heicConvert from "heic-convert";
 import fileType from "file-type";
+import { AttendanceSyncService } from "./src/services/attendanceSync.service.mjs";
+import { ParticipantSyncService } from "./src/services/participantSync.service.mjs";
+import { listJobs } from "./src/utils/syncProgress.mjs";
+import {
+  runOutboxForProject,
+  runPartSyncCrons,
+} from "./src/cron-jobs/stagedSync.mjs";
 
 const app = express();
 
@@ -124,18 +132,446 @@ conn.login(
 
 app.get("/api/sampling", (req, res) => {
   // kick off both jobs but don't await
-  FarmVisitService.sampleFarmVisits(conn).catch(err => logger.error(err));
-  TSessionService.sampleTSForApprovals(conn).catch(err => logger.error(err));
+  FarmVisitService.sampleFarmVisits(conn).catch((err) => logger.error(err));
+  TSessionService.sampleTSForApprovals(conn).catch((err) => logger.error(err));
 
   // respond at once
   res.json({ success: true, message: "Sampling started" });
 });
 
-
 app.get("/api/mail", async (req, res) => {
   await FarmVisitService.sendRemainderEmail();
   await TSessionService.sendRemainderEmail();
   res.send("Done sending mails");
+});
+
+// --- PROGRESS INSPECTION ENDPOINTS ---
+
+// All jobs (recent first)
+app.get("/api/sync/progress", (req, res) => {
+  res.json({ status: 200, jobs: listJobs() });
+});
+
+// Single job by id
+app.get("/api/sync/progress/:jobId", (req, res) => {
+  const job = getJob(req.params.jobId);
+  if (!job)
+    return res.status(404).json({ status: 404, message: "Job not found" });
+  res.json({ status: 200, job });
+});
+
+// GET /api/participants/sync/full
+app.get("/api/participants/sync/full", async (req, res) => {
+  try {
+    const projects = await Projects.findAll({
+      where: { attendance_full: true },
+      attributes: ["sf_project_id"],
+    });
+
+    if (!projects.length) {
+      return res.status(404).json({ message: "No active projects found." });
+    }
+
+    const projectIds = projects.map((p) => p.sf_project_id);
+
+    const results = await Promise.allSettled(
+      projectIds.map(async (projectId) => {
+        const startedAt = Date.now();
+        // lightweight console progress (optional)
+        const onProgress = (p) => {
+          if (p?.phase === "query" && p.total != null) {
+            console.log(`[full] ${projectId}: fetched ${p.fetched}/${p.total}`);
+          } else if (p?.phase === "upsert" && p.totalRows != null) {
+            console.log(
+              `[full] ${projectId}: upserted ${p.processed}/${p.totalRows}`
+            );
+          } else if (p?.message) {
+            console.log(`[full] ${projectId}: ${p.message}`);
+          }
+        };
+
+        await ParticipantSyncService.fullRefresh(conn, projectId, onProgress);
+        const durationMs = Date.now() - startedAt;
+        return { projectId, durationMs };
+      })
+    );
+
+    const failures = results
+      .map((r, i) => ({ r, i }))
+      .filter((x) => x.r.status === "rejected");
+
+    if (failures.length) {
+      console.error(
+        "Some projects failed to sync:",
+        failures.map((f) => ({
+          projectId: projectIds[f.i],
+          error: f.r.reason?.message || String(f.r.reason),
+        }))
+      );
+      return res.status(500).json({
+        message: "Some projects failed to sync",
+        failures: failures.map((f) => ({
+          projectId: projectIds[f.i],
+          error: f.r.reason?.message || String(f.r.reason),
+        })),
+      });
+    }
+
+    console.log("✅ Full participant sync complete for all projects");
+    res.json({
+      message: "Full participant sync completed successfully.",
+      results: results.map((r, i) => ({
+        projectId: projectIds[i],
+        status: "ok",
+        durationMs: r.value.durationMs,
+      })),
+    });
+  } catch (err) {
+    console.error("❌ Error in full participant sync:", err);
+    res
+      .status(500)
+      .json({ message: "Error in full participant sync", error: err.message });
+  }
+});
+
+// GET /api/participants/sync/incremental
+app.get("/api/participants/sync/incremental", async (req, res) => {
+  try {
+    const projects = await Projects.findAll({
+      where: { attendance_full: true },
+      attributes: ["sf_project_id"],
+    });
+
+    if (!projects.length) {
+      return res.status(404).json({ message: "No active projects found." });
+    }
+
+    const projectIds = projects.map((p) => p.sf_project_id);
+
+    const results = await Promise.allSettled(
+      projectIds.map(async (projectId) => {
+        const startedAt = Date.now();
+        const onProgress = (p) => {
+          if (p?.phase === "query" && p.total != null) {
+            console.log(
+              `[incremental] ${projectId}: fetched ${p.fetched}/${p.total}`
+            );
+          } else if (p?.phase === "upsert" && p.totalRows != null) {
+            console.log(
+              `[incremental] ${projectId}: upserted ${p.processed}/${p.totalRows}`
+            );
+          } else if (p?.message) {
+            console.log(`[incremental] ${projectId}: ${p.message}`);
+          }
+        };
+
+        await ParticipantSyncService.syncIncremental(
+          conn,
+          projectId,
+          onProgress
+        );
+        const durationMs = Date.now() - startedAt;
+        return { projectId, durationMs };
+      })
+    );
+
+    const failures = results
+      .map((r, i) => ({ r, i }))
+      .filter((x) => x.r.status === "rejected");
+
+    if (failures.length) {
+      console.error(
+        "Some projects failed to sync:",
+        failures.map((f) => ({
+          projectId: projectIds[f.i],
+          error: f.r.reason?.message || String(f.r.reason),
+        }))
+      );
+      return res.status(500).json({
+        message: "Some projects failed to sync",
+        failures: failures.map((f) => ({
+          projectId: projectIds[f.i],
+          error: f.r.reason?.message || String(f.r.reason),
+        })),
+      });
+    }
+
+    console.log("✅ Incremental participant sync complete for all projects");
+    res.json({
+      message: "Incremental participant sync completed successfully.",
+      results: results.map((r, i) => ({
+        projectId: projectIds[i],
+        status: "ok",
+        durationMs: r.value.durationMs,
+      })),
+    });
+  } catch (err) {
+    console.error("❌ Error in incremental participant sync:", err);
+    res.status(500).json({
+      message: "Error in incremental participant sync",
+      error: err.message,
+    });
+  }
+});
+
+app.get("/api/attendance/sync", async (req, res) => {
+  try {
+    const projects = await Projects.findAll({
+      where: { attendance_full: true },
+    });
+
+    if (!projects.length) {
+      return res.status(404).json({ message: "No active projects found." });
+    }
+
+    // Kick off all syncs in parallel
+    const results = await Promise.allSettled(
+      projects.map((p) =>
+        AttendanceSyncService.syncFromSalesforce(p.sf_project_id, conn)
+      )
+    );
+
+    // Check for failures
+    const failures = results.filter((r) => r.status === "rejected");
+    if (failures.length) {
+      console.error("Some projects failed to sync:", failures);
+      return res
+        .status(500)
+        .json({ message: "Some projects failed to sync", failures });
+    }
+
+    console.log("✅ All projects synced");
+    res.json({ message: "Attendance sync completed successfully." });
+  } catch (err) {
+    console.error("❌ Error in SF→PG sync:", err);
+    res
+      .status(500)
+      .json({ message: "Error in SF→PG sync", error: err.message });
+  }
+});
+
+app.get("/api/sync/participantsToSalesforce", async (req, res) => {
+  try {
+    const projects = await Projects.findAll({
+      where: { attendance_full: true },
+      attributes: ["project_id", "sf_project_id"],
+    });
+
+    projects.forEach(async (p) => {
+      console.log(`Pushing participants for project to salesforce ${p.sf_project_id}`);
+      await runOutboxForProject(p.sf_project_id, conn);
+      console.log(`✅ Participants pushed for project ${p.sf_project_id}`);
+    });
+
+    res.json({ message: "Participants pushed to Salesforce successfully." });
+  } catch (err) {
+    console.error("❌ Error pushing participants to Salesforce:", err);
+    res.status(500).json({
+      message: "Error pushing participants to Salesforce",
+      error: err.message,
+    });
+  }
+});
+
+// server.mjs (add near your other imports)
+import { Op } from "sequelize";
+import UploadRun from "./src/models/uploadRun.model.mjs";
+import HouseholdOutbox from "./src/models/householdOutbox.model.mjs";
+import ParticipantOutbox from "./src/models/participantOutbox.model.mjs";
+import AttendanceOutbox from "./src/models/attendanceOutbox.model.mjs";
+
+// helper: choose the most relevant run (prefer running; else latest)
+async function pickLatestRun(projectId, explicitRunId) {
+  if (explicitRunId) {
+    const run = await UploadRun.findOne({
+      where: { id: explicitRunId, projectId },
+    });
+    if (run) return run;
+  }
+  const running = await UploadRun.findOne({
+    where: { projectId, status: "running" },
+    order: [["created_at", "DESC"]],
+  });
+  if (running) return running;
+
+  return UploadRun.findOne({
+    where: { projectId },
+    order: [["created_at", "DESC"]],
+  });
+}
+
+// helper: build a WHERE that scopes rows to a run even if upload_run_id column
+// is not present on the outbox table (fallback to createdAt window)
+function scopeToRun(model, projectId, run) {
+  const where = { projectId };
+  const attrs = model.rawAttributes || {};
+
+  if (run) {
+    if (attrs.uploadRunId) {
+      // preferred: hard link
+      where.uploadRunId = run.id;
+    } else if (attrs.createdAt) {
+      // fallback: time window
+      where.createdAt = {
+        [Op.gte]: run.startedAt || run.createdAt,
+        ...(run.finishedAt ? { [Op.lte]: run.finishedAt } : {}),
+      };
+    }
+  }
+  return where;
+}
+
+async function countsFor(model, where) {
+  const [total, pending, processing, failed, sent] = await Promise.all([
+    model.count({ where }),
+    model.count({ where: { ...where, status: "pending" } }),
+    model.count({ where: { ...where, status: "processing" } }),
+    model.count({ where: { ...where, status: "failed" } }),
+    model.count({ where: { ...where, status: "sent" } }),
+  ]);
+  const leftToSend = pending + processing; // for progress bar
+  const percent = total ? Math.round((sent / total) * 100) : 0;
+  return { total, pending, processing, failed, sent, leftToSend, percent };
+}
+
+async function failedRowsFor(model, where, type) {
+  const rows = await model.findAll({
+    where: { ...where, status: "failed" },
+    order: [["updated_at", "DESC"]],
+    limit: 200,
+  });
+
+  // project a compact, UI-friendly payload preview
+  return rows.map((r) => {
+    const base = {
+      type,
+      id: r.id,
+      attempts: r.attempts,
+      lastError: r.lastError,
+      updatedAt: r.updatedAt,
+    };
+
+    // try to surface helpful identifiers without dumping full payloads
+    try {
+      const p = r.payload || {};
+      if (type === "household") {
+        return {
+          ...base,
+          ffgId: r.ffgId || p.__resolverHints?.ffgId || null,
+          householdComposite: r.householdComposite || p.Household_ID__c || null,
+          sfId: r.salesforceId || p.Id || null,
+        };
+      }
+      if (type === "participant") {
+        return {
+          ...base,
+          tnsId: p.TNS_Id__c || r.participantTnsId || null,
+          ffgId: p.__resolverHints?.ffgId || r.ffgId || null,
+          householdComposite: p.__resolverHints?.householdComposite || null,
+          sfId: p.Id || r.salesforceId || null,
+        };
+      }
+      if (type === "attendance") {
+        return {
+          ...base,
+          ffgId: r.ffgId || p.__resolverHints?.ffgId || null,
+          moduleId: r.moduleId || p.__resolverHints?.moduleId || null,
+          participantSalesforceId: r.participantSalesforceId || null,
+          participantTnsId: r.participantTnsId || null,
+        };
+      }
+    } catch (_) {
+      /* ignore malformed payloads */
+    }
+
+    return base;
+  });
+}
+
+// --------------------------- PROGRESS API ---------------------------
+app.get("/api/outbox/progress/:projectId", async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { runId } = req.query;
+
+    // find the most relevant run for this project
+    const run = await pickLatestRun(projectId, runId);
+
+    // scope outbox queries to the project (and run, if present)
+    const hhWhere = scopeToRun(HouseholdOutbox, projectId, run);
+    const prtWhere = scopeToRun(ParticipantOutbox, projectId, run);
+    const attWhere = scopeToRun(AttendanceOutbox, projectId, run);
+
+    // per-phase counts
+    const [households, participants, attendance] = await Promise.all([
+      countsFor(HouseholdOutbox, hhWhere),
+      countsFor(ParticipantOutbox, prtWhere),
+      countsFor(AttendanceOutbox, attWhere),
+    ]);
+
+    // overall summary (UI can build a single progress bar)
+    const total = households.total + participants.total + attendance.total;
+    const sent = households.sent + participants.sent + attendance.sent;
+    const failed = households.failed + participants.failed + attendance.failed;
+    const leftToSend =
+      households.leftToSend + participants.leftToSend + attendance.leftToSend;
+    const percent = total ? Math.round((sent / total) * 100) : 0;
+
+    // failed rows (current run only, if available)
+    const [hhFailed, prtFailed, attFailed] = await Promise.all([
+      failedRowsFor(HouseholdOutbox, hhWhere, "household"),
+      failedRowsFor(ParticipantOutbox, prtWhere, "participant"),
+      failedRowsFor(AttendanceOutbox, attWhere, "attendance"),
+    ]);
+
+
+    const isSyncing = run ? run.status === "running" || run.status === "pending" : false;
+
+    return res.json({
+      status: 200,
+      projectId,
+      run: run
+        ? {
+            id: run.id,
+            status: run.status,
+            startedAt: run.startedAt || run.createdAt,
+            finishedAt: run.finishedAt,
+            meta: run.meta || null,
+
+            // CSV link & metadata (if you stored them on the run)
+            fileUrl: run.fileUrl || null,
+            fileName: run.fileName || null,
+            fileBytes: run.fileBytes || null,
+            mimeType: run.mimeType || null,
+          }
+        : null,
+
+      // ordered to reflect the sync sequence: Households → Participants → Attendance
+      phases: {
+        households,
+        participants,
+        attendance,
+      },
+
+      summary: {
+        total,
+        sent,
+        failed,
+        leftToSend,
+        percent, // 0..100
+        isSyncing,
+      },
+
+      // show failed records for *this* upload (capped)
+      failed: [...hhFailed, ...prtFailed, ...attFailed],
+    });
+  } catch (err) {
+    console.error("progress api error:", err);
+    return res.status(500).json({
+      status: 500,
+      message: err?.message || "Failed to fetch progress",
+    });
+  }
 });
 
 // Utility API endpoint to fetch images from Salesforce
@@ -224,7 +660,7 @@ const server = new ApolloServer({
     PerformanceResolvers,
     WetmillsResolvers,
     WetMillVisitsResolvers,
-    DashboardResolvers
+    DashboardResolvers,
   ],
   subscriptions: { path: "/subscriptions", onConnect: () => pubSub },
   csrfPrevention: true,
@@ -235,13 +671,16 @@ const server = new ApolloServer({
     };
   },
   introspection: true,
-  playground: true
+  playground: true,
 });
 
 server
   .start()
   .then(() => {
     server.applyMiddleware({ app });
+
+    console.log("scheduleStagedPush started");
+    runPartSyncCrons(conn);
 
     app.listen({ port: PORT }, () => {
       console.log(

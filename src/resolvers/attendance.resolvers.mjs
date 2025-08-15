@@ -1,16 +1,23 @@
+import Projects from "../models/projects.models.mjs";
 import { AttendanceService } from "../services/attendance.service.mjs";
+import { AttendanceSyncService } from "../services/attendanceSync.service.mjs";
 
 const AttendanceResolvers = {
   Query: {
-    getAttendances: async (
-      _,
-      { project_id, limit = 10000, offset = 0 },
-      { sf_conn }
-    ) => {
+    getAttendances: async (_, { project_id }, { sf_conn }) => {
       try {
-        const attendanceData = await AttendanceService.fetchAndCacheAttendance(
-          project_id,
-          sf_conn
+
+        const project = await Projects.findOne({
+          where: { sf_project_id: project_id, attendance_full: true },
+        });
+
+        if (project) {
+          await AttendanceSyncService.syncFromSalesforce(project_id, sf_conn);
+        }
+
+        // now fetches from Postgres
+        const attendanceData = await AttendanceService.fetchAttendance(
+          project_id
         );
 
         if (!attendanceData || attendanceData.length === 0) {
@@ -20,31 +27,23 @@ const AttendanceResolvers = {
           };
         }
 
-        // Slice the full cached data for this request
-        const paginatedData = attendanceData.slice(offset, offset + limit);
-
         return {
           message: "Attendance fetched successfully",
           status: 200,
-          attendance: paginatedData.map((attendance) => ({
-            attendance_id: attendance.Id,
-            attendance_name: attendance.Name,
-            participant_id: attendance.Participant__c,
-            attendance_date: attendance.Date__c,
-            attendance_status:
-              attendance.Attended__c === 1 ? "Present" : "Absent",
-            session_id: attendance.Training_Session__c,
-            module_name:
-              attendance.Training_Session__r?.Training_Module__r
-                ?.Module_Title__c || "",
-            module_number:
-              attendance.Training_Session__r?.Training_Module__r
-                ?.Module_Number__c || "",
-            module_id: attendance.Training_Session__r?.Training_Module__c || "",
+          attendance: attendanceData.map((a) => ({
+            attendance_id: a.salesforceId,
+            attendance_name: a.name,
+            participant_id: a.participantId,
+            attendance_date: a.date,
+            attendance_status: a.attended ? "Present" : "Absent",
+            session_id: a.trainingSessionId,
+            module_name: a.moduleName || "",
+            module_number: a.moduleNumber != null ? a.moduleNumber : 0,
+            module_id: a.moduleId || "",
           })),
         };
       } catch (error) {
-        console.log(error);
+        console.error(error);
         return {
           message: error.message,
           status: error.status || 500,

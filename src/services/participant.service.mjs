@@ -1,7 +1,95 @@
 import Projects from "../models/projects.models.mjs";
+import Participant from "../models/participant.model.mjs";
 import redis from "../config/redisClient.mjs"; // Import the Redis client
 
+function mapRowToDto(p) {
+  return {
+    p_id: p.salesforceId,
+    first_name: p.firstName || "",
+    middle_name: p.middleName || "",
+    last_name: p.lastName || "",
+    age: p.age ?? null,
+
+    // Farm_Size__c -> coffee_tree_numbers
+    coffee_tree_numbers: p.coffeeTreeNumbers ?? null,
+
+    // Household__r.Name -> hh_number
+    hh_number: p.hhNumber ?? null,
+
+    // Training_Group__r.TNS_Id__c -> ffg_id
+    ffg_id: p.ffgId || "",
+
+    gender: p.gender || "",
+    location: p.location || "N/A",
+
+    // TNS_Id__c -> tns_id
+    tns_id: p.tnsId || "",
+
+    status: p.status || "",
+
+    farmer_trainer: p.farmerTrainer || "",
+    business_advisor: p.businessAdvisor || null,
+
+    // Project__c -> project_name
+    project_name: p.projectName || "",
+
+    // Training_Group__c -> training_group
+    training_group: p.trainingGroup || "",
+
+    // Household__c -> household_id
+    household_id: p.householdId || null,
+
+    // Primary_Household_Member__c -> 1 | 2
+    primary_household_member: p.primaryHouseholdMember ?? null,
+
+    // Create_In_CommCare__c
+    create_in_commcare: p.createInCommcare === true,
+
+    // Other_ID_Number__c -> coop_membership_number (or national id depending on project in FE)
+    coop_membership_number: p.otherIdNumber || "",
+
+    phone_number: p.phoneNumber || "",
+
+    // Number_of_Coffee_Plots__c (with fallback already handled during sync)
+    number_of_coffee_plots: p.numberOfCoffeePlots ?? null,
+  };
+}
+
 export const ParticipantsService = {
+  async getParticipantsByProject(projectId) {
+    try {
+      const rows = await Participant.findAll({
+        where: { projectId },
+        order: [
+          ["tns_id", "ASC"],
+          ["hh_number", "ASC"],
+        ],
+      });
+
+      if (!rows || rows.length === 0) {
+        return {
+          message: "Participants not found",
+          status: 404,
+          participants: [],
+        };
+      }
+
+      const participants = rows.map(mapRowToDto);
+      return {
+        message: "Participants fetched successfully",
+        status: 200,
+        participants,
+      };
+    } catch (err) {
+      console.error("getParticipantsByProject error:", err);
+      return {
+        message: "Failed to fetch participants",
+        status: 500,
+        participants: [],
+      };
+    }
+  },
+
   async fetchAndCacheParticipants(conn, projectId) {
     const cacheKey = `participants:${projectId}`;
 
@@ -32,15 +120,18 @@ export const ParticipantsService = {
         return response;
       }
 
-      let addInactiveFamers = "";
+      let status = "";
 
       if (project.sf_project_id === "a0EOj000003TZQTMA4") {
-        addInactiveFamers = " OR Status__c = 'Inactive' ";
+        status = " AND Status__c = 'Inactive' ";
+      } else {
+        status = " AND Status__c = 'Active' ";
       }
 
       // Fetch participants from Salesforce
       let participants = [];
-      let result = await conn.query(`
+
+      const soql = `
         SELECT Id, Name, Middle_Name__c, Last_Name__c, Gender__c, Age__c, 
           Household__r.Farm_Size__c, Household__r.Name, Training_Group__r.TNS_Id__c, 
           Training_Group__r.Project_Location__c, TNS_Id__c, Status__c, Trainer_Name__c, 
@@ -49,10 +140,13 @@ export const ParticipantsService = {
           Phone_Number__c, Number_of_Coffee_Plots__c, Household__r.Number_of_Coffee_Plots__c, 
           Training_Group__r.Location__r.Name, Training_Group__r.Project__r.Project_Country__c
         FROM Participant__c 
-        WHERE Project__c = '${project.project_name}' AND Status__c = 'Active'
-          ${addInactiveFamers} 
+        WHERE Project__c = '${project.project_name}'
+          ${status} 
         ORDER BY TNS_Id__c Asc, Household__r.Name Asc
-      `);
+      `;
+
+      console.log(soql);
+      let result = await conn.query(soql);
 
       participants = participants.concat(result.records);
 

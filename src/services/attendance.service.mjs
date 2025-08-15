@@ -1,6 +1,18 @@
 import redis from "../config/redisClient.mjs";
+import Attendance from "../models/attendance.model.mjs";
 
 export const AttendanceService = {
+
+  async fetchAttendance(projectId) {
+    const where = {};
+    if (projectId) where.projectId = projectId;
+
+    return await Attendance.findAll({
+      where,
+      order: [["date", "ASC"]],
+    });
+
+  },
   async fetchAndCacheAttendance(projectId, sf_conn) {
     const cacheKey = `attendance:${projectId}`;
     const cachedData = await redis.get(cacheKey);
