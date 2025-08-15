@@ -376,7 +376,7 @@ app.get("/api/sync/participantsToSalesforce", async (req, res) => {
 
 app.post("/api/outbox/retry", async (_req, res) => {
   try {
-    const statuses = ["failed", "dead"];
+    const statuses = ["failed"];
     const QUEUE = {
       households: HouseholdOutbox,
       participants: ParticipantOutbox,
