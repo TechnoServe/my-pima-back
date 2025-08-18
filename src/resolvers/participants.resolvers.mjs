@@ -20,7 +20,7 @@ const ParticipantsResolvers = {
         if (project) {
           console.log("Using real-time sync for SPECIAL_USER project");
           // Ensure SPECIAL_USER edits are applied in real time
-          await ParticipantSyncService.syncIncremental(sf_conn, project_id);
+          // await ParticipantSyncService.syncIncremental(sf_conn, project_id);
 
           // Then return Postgres‐cached participants
           return await ParticipantsService.getParticipantsByProject(project_id);
