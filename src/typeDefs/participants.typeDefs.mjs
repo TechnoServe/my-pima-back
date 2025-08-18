@@ -38,8 +38,8 @@ const ParticipantsTypeDefs = gql`
     gender: String
     phoneNumber: String
     primaryHouseholdMember: Boolean
-    numberOfCoffeePlots: Int # from your number_of_coffee_plots mapping
-    coffeeTreeNumbers: Int # from your coffee_tree_numbers mapping
+    numberOfCoffeePlots: Float # from your number_of_coffee_plots mapping
+    coffeeTreeNumbers: Float # from your coffee_tree_numbers mapping
   }
 
   type Household {
@@ -47,7 +47,7 @@ const ParticipantsTypeDefs = gql`
     householdName: String
     visitCount: Int!
     lastVisitedAt: String
-    coffeePlots: Int! # max across members (derived)
+    coffeePlots: Float! # max across members (derived)
     participants: [ParticipantLite!]!
   }
 
