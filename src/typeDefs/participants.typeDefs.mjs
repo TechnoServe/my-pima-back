@@ -2,6 +2,7 @@ import { gql } from "apollo-server-express";
 
 const ParticipantsTypeDefs = gql`
   scalar Upload
+  scalar DateTime
 
   type Participant {
     p_id: String!
@@ -28,10 +29,33 @@ const ParticipantsTypeDefs = gql`
     phone_number: String
   }
 
+  type ParticipantLite {
+    id: ID!
+    tnsId: String
+    firstName: String
+    middleName: String
+    lastName: String
+    gender: String
+    phoneNumber: String
+    primaryHouseholdMember: Boolean
+    numberOfCoffeePlots: Int # from your number_of_coffee_plots mapping
+    coffeeTreeNumbers: Int # from your coffee_tree_numbers mapping
+  }
+
+  type Household {
+    householdId: String!
+    householdName: String
+    visitCount: Int!
+    lastVisitedAt: String
+    coffeePlots: Int! # max across members (derived)
+    participants: [ParticipantLite!]!
+  }
+
   type Query {
     getParticipantsByProject(project_id: String!): AllParticipantsResponse
     getParticipantsByGroup(tg_id: String!): AllParticipantsResponse
     getParticipantsById(p_id: String!): SingleParticipantResponse
+    householdsForProject(projectId: ID!): [Household!]!
   }
 
   type Mutation {

@@ -676,6 +676,10 @@ const FarmVisitsResolvers = {
         };
       }
     },
+
+    householdsForProject: async (_p, { projectId }, { sf_conn }) => {
+      return FarmVisitService.getHouseholdVisits(sf_conn, projectId);
+    },
   },
   Mutation: {
     async submitBatch(_, { input }) {

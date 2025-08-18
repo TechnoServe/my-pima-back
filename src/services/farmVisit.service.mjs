@@ -19,6 +19,8 @@ import Users from "../models/users.model.mjs";
 import Roles from "../models/roles.model.mjs";
 import { getWeekRange } from "../utils/date.utils.mjs";
 import pLimit from "p-limit";
+import Participant from "../models/participant.model.mjs";
+import { ParticipantsService } from "./participant.service.mjs";
 
 const BATCH_SIZE = 100;
 
@@ -124,7 +126,7 @@ export const FarmVisitService = {
       const limit = pLimit(5);
 
       await Promise.all(
-        projects.map(project =>
+        projects.map((project) =>
           limit(async () => {
             try {
               const lastMonday = moment()
@@ -207,7 +209,6 @@ export const FarmVisitService = {
       logger.error(`Error during farm visit sampling: ${error.message}`);
     }
   },
-
 
   async getSampledVisitsStats(projectId) {
     const startOfLastWeek = moment()
@@ -516,6 +517,52 @@ export const FarmVisitService = {
       })
     );
   },
+
+  async getHouseholdVisits(sf_conn, projectId) {
+    // 1) Get participants via your function (parsing exactly as you do)
+    const resp = await ParticipantsService.fetchAndCacheParticipants(
+      sf_conn,
+      projectId
+    );
+    if (resp.status !== 200) return [];
+
+    // 2) Group by household
+    const byHH = groupByHousehold(resp.participants);
+    const hhIds = Array.from(byHH.keys());
+
+    // 3) Fetch visits per household
+    const visitMap = await queryVisitsByHousehold(sf_conn, hhIds);
+
+    // 4) Build plain array (no filters)
+    const out = [];
+    for (const [hhId, hh] of byHH.entries()) {
+      const v = visitMap.get(hhId);
+      out.push({
+        householdId: hhId,
+        householdName: hh.householdName,
+        visitCount: v ? v.count : 0,
+        lastVisitedAt: v?.lastVisitedAt ? v.lastVisitedAt.toISOString() : null,
+        coffeePlots: calcHouseholdCoffeePlots(hh),
+        participants: hh.participants,
+      });
+    }
+
+    // Sort: visited first by recency, then never visited by name
+    out.sort((a, b) => {
+      const av = a.visitCount > 0 ? 1 : 0;
+      const bv = b.visitCount > 0 ? 1 : 0;
+      if (av !== bv) return bv - av;
+      if (a.visitCount && b.visitCount) {
+        return (
+          (new Date(b.lastVisitedAt).getTime() || 0) -
+          (new Date(a.lastVisitedAt).getTime() || 0)
+        );
+      }
+      return (a.householdName || "").localeCompare(b.householdName || "");
+    });
+
+    return out;
+  },
 };
 
 // Batch processing for saving farm visits and best practices
@@ -585,7 +632,7 @@ const extractBestPracticesFromVisit = (bpFieldMapping, visit) => {
         bestPractices.push(record);
       }
 
-      if (record.practice_name == record.practice_name == "Compost BU") {
+      if ((record.practice_name == record.practice_name) == "Compost BU") {
         bestPractices.push(record);
       }
     }
@@ -711,3 +758,86 @@ const processFVResponse = (farmVisits) =>
     pima_farmer_id: fv.Farm_Visited__c,
     gender: fv.Farm_Visited__r.Gender__c,
   }));
+
+const toInt = (v) => {
+  if (v === null || v === undefined || v === "") return 0;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+function groupByHousehold(participants) {
+  const byHH = new Map();
+  for (const p of participants) {
+    const hhId = p.household_id;
+    if (!hhId) continue;
+
+    if (!byHH.has(hhId)) {
+      byHH.set(hhId, {
+        householdId: hhId,
+        householdName: p.hh_number || null, // you map Household__r.Name → hh_number
+        participants: [],
+      });
+    }
+    byHH.get(hhId).participants.push({
+      id: p.p_id,
+      tnsId: p.tns_id,
+      firstName: p.first_name,
+      middleName: p.middle_name,
+      lastName: p.last_name,
+      gender: p.gender,
+      phoneNumber: p.phone_number,
+      primaryHouseholdMember: p.primary_household_member === 1,
+      numberOfCoffeePlots: toInt(p.number_of_coffee_plots),
+      coffeeTreeNumbers: toInt(p.coffee_tree_numbers),
+    });
+  }
+  return byHH;
+}
+
+function calcHouseholdCoffeePlots(hh) {
+  let maxPlots = 0;
+  for (const m of hh.participants) {
+    maxPlots = Math.max(
+      maxPlots,
+      toInt(m.numberOfCoffeePlots) || toInt(m.coffeeTreeNumbers)
+    );
+  }
+  return maxPlots;
+}
+
+async function queryVisitsByHousehold(sf_conn, householdIds) {
+  if (!householdIds.length) return new Map();
+  const visitMap = new Map();
+  const CHUNK = 200;
+
+  for (let i = 0; i < householdIds.length; i += CHUNK) {
+    const batch = householdIds.slice(i, i + CHUNK);
+    const soql = `
+      SELECT Id, Farm_Visited__r.Household__c, Date_Visited__c
+      FROM Farm_Visit__c
+      WHERE Farm_Visited__r.Household__c IN (${batch
+        .map((x) => `'${x}'`)
+        .join(", ")})
+    `;
+    let res = await sf_conn.query(soql);
+    const recs = [...(res.records || [])];
+    while (!res.done) {
+      res = await sf_conn.queryMore(res.nextRecordsUrl);
+      if (res.records?.length) recs.push(...res.records);
+    }
+    for (const r of recs) {
+      const hhId = r.Farm_Visited__r?.Household__c;
+      if (!hhId) continue;
+      const when = r.Date_Visited__c ? new Date(r.Date_Visited__c) : null;
+      const prev = visitMap.get(hhId) || { count: 0, lastVisitedAt: null };
+      const last =
+        prev.lastVisitedAt && when
+          ? when > prev.lastVisitedAt
+            ? when
+            : prev.lastVisitedAt
+          : prev.lastVisitedAt || when;
+      visitMap.set(hhId, { count: prev.count + 1, lastVisitedAt: last });
+    }
+  }
+  return visitMap;
+}

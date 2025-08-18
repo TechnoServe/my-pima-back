@@ -745,7 +745,7 @@ server
     server.applyMiddleware({ app });
 
     console.log("scheduleStagedPush started");
-    runPartSyncCrons(conn);
+    // runPartSyncCrons(conn);
 
     app.listen({ port: PORT }, () => {
       console.log(

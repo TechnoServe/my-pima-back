@@ -5,6 +5,21 @@ import Projects from "../models/projects.models.mjs";
 import SyncMetadata from "../models/syncMetadata.model.mjs";
 import sequelize from "../config/db.mjs";
 
+// put near the top of the file
+const UPSERT_FIELDS = [
+  "projectId","tnsId","firstName","middleName","lastName",
+  "gender","age","coffeeTreeNumbers","hhNumber","ffgId","location",
+  "status","farmerTrainer","businessAdvisor","trainingGroup","householdId",
+  "primaryHouseholdMember","createInCommcare","otherIdNumber","phoneNumber",
+  "numberOfCoffeePlots","lastModifiedDate","sendToSalesforce","salesforceId"
+];
+
+function stripIdAndTimestamps(row) {
+  const { id, createdAt, updatedAt, ...rest } = row;
+  return rest;
+}
+
+
 /** simple chunker */
 function chunkArray(arr, size) {
   const chunks = [];
@@ -209,130 +224,83 @@ const UPDATE_FIELDS = [
 export async function upsertParticipantsSmart(rows) {
   if (!rows.length) return { created: 0, updated: 0, reassignments: 0 };
 
-  // Gather keys
-  const sfIds = Array.from(
-    new Set(rows.map((r) => r.salesforceId).filter(Boolean))
-  );
-  const tnsIds = Array.from(new Set(rows.map((r) => r.tnsId).filter(Boolean)));
+  const sfIds = Array.from(new Set(rows.map(r => r.salesforceId).filter(Boolean)));
+  const tnsIds = Array.from(new Set(rows.map(r => r.tnsId).filter(Boolean)));
 
-  // Load potential matches (need status for takeover logic)
   const [bySf, byTns] = await Promise.all([
-    sfIds.length
-      ? Participant.findAll({
-          attributes: [
-            "id",
-            "salesforceId",
-            "tnsId",
-            "status",
-            "lastModifiedDate",
-          ],
-          where: { salesforceId: { [Op.in]: sfIds } },
-          raw: true,
-        })
-      : [],
-    tnsIds.length
-      ? Participant.findAll({
-          attributes: [
-            "id",
-            "salesforceId",
-            "tnsId",
-            "status",
-            "lastModifiedDate",
-          ],
-          where: { tnsId: { [Op.in]: tnsIds } },
-          raw: true,
-        })
-      : [],
+    sfIds.length ? Participant.findAll({
+      attributes: ["id","salesforceId","tnsId","status","lastModifiedDate"],
+      where: { salesforceId: { [Op.in]: sfIds } }, raw: true,
+    }) : [],
+    tnsIds.length ? Participant.findAll({
+      attributes: ["id","salesforceId","tnsId","status","lastModifiedDate"],
+      where: { tnsId: { [Op.in]: tnsIds } }, raw: true,
+    }) : [],
   ]);
 
-  const mapBySf = new Map(bySf.map((x) => [x.salesforceId, x]));
-  const mapByTns = new Map(byTns.map((x) => [x.tnsId, x]));
+  const mapBySf  = new Map(bySf.map(x  => [x.salesforceId, x]));
+  const mapByTns = new Map(byTns.map(x => [x.tnsId, x]));
 
-  let created = 0,
-    updated = 0,
-    reassignments = 0;
+  let created = 0, updated = 0, reassignments = 0;
 
-  // Process in chunks inside a transaction so takeover is atomic
   for (const batch of chunkArray(rows, 2000)) {
     await sequelize.transaction(async (t) => {
-      const creates = [];
-      const updates = [];
+      const toCreate = [];
+      const toUpsert = []; // upsert by salesforce_id (no id field)
 
-      for (const incoming of batch) {
-        const incomingStatus = (incoming.status || "").toLowerCase(); // "Active" | "Inactive" etc.
-        const sfMatch = incoming.salesforceId
-          ? mapBySf.get(incoming.salesforceId)
-          : null;
-        const tnsMatch = incoming.tnsId ? mapByTns.get(incoming.tnsId) : null;
+      for (const incoming0 of batch) {
+        // always ensure outbound flag stays false for SF->PG
+        const incoming = { ...incoming0, sendToSalesforce: false };
+
+        const sfMatch  = incoming.salesforceId ? mapBySf.get(incoming.salesforceId) : null;
+        const tnsMatch = incoming.tnsId        ? mapByTns.get(incoming.tnsId)        : null;
 
         if (sfMatch) {
-          // Update by SF
-          updates.push({ id: sfMatch.id, ...incoming });
+          toUpsert.push(stripIdAndTimestamps({ ...sfMatch, ...incoming }));
           continue;
         }
 
         if (tnsMatch) {
-          const tnsIsInactive =
-            (tnsMatch.status || "").toLowerCase() === "inactive";
-          const isDifferentPerson =
-            incoming.salesforceId &&
-            incoming.salesforceId !== tnsMatch.salesforceId;
+          const tnsIsInactive    = (tnsMatch.status || "").toLowerCase() === "inactive";
+          const isDifferentSF    = incoming.salesforceId && incoming.salesforceId !== tnsMatch.salesforceId;
+          const incomingIsActive = (incoming.status || "").toLowerCase() === "active";
 
-          // TAKEOVER: free the old inactive holder, give TNS to the new active participant
-          if (
-            tnsIsInactive &&
-            isDifferentPerson &&
-            incomingStatus === "active"
-          ) {
-            await Participant.update(
-              { tnsId: null }, // free the unique key
-              { where: { id: tnsMatch.id }, transaction: t }
-            );
-            // reflect the change in our in-memory map to prevent double-conflicts in this txn
+          if (tnsIsInactive && isDifferentSF && incomingIsActive) {
+            // free TNS from old inactive record
+            await Participant.update({ tnsId: null }, { where: { id: tnsMatch.id }, transaction: t });
             mapByTns.delete(tnsMatch.tnsId);
             reassignments += 1;
 
-            // If we separately have a row by SF, update it; else create a new one
-            const sfAgain = incoming.salesforceId
-              ? mapBySf.get(incoming.salesforceId)
-              : null;
-            if (sfAgain) {
-              updates.push({ id: sfAgain.id, ...incoming });
-            } else {
-              creates.push(incoming);
-            }
+            // upsert by salesforce_id for the new owner
+            toUpsert.push(stripIdAndTimestamps(incoming));
             continue;
           }
 
-          // Normal case: keep updating the existing TNS row
-          updates.push({ id: tnsMatch.id, ...incoming });
+          // same person on that TNS → upsert by their SF (or by tns-holder's SF)
+          const current = sfMatch || tnsMatch;
+          toUpsert.push(stripIdAndTimestamps({ ...current, ...incoming }));
           continue;
         }
 
-        // Brand new
-        creates.push(incoming);
+        // brand-new in PG → create (no id)
+        toCreate.push(stripIdAndTimestamps(incoming));
       }
 
-      // Bulk CREATE (unique on tns_id is safe because we freed on takeover)
-      if (creates.length) {
-        for (const c of chunkArray(creates, 3000)) {
-          await Participant.bulkCreate(c, {
-            transaction: t,
-            logging: false,
-            validate: false,
-          });
+      if (toCreate.length) {
+        for (const c of chunkArray(toCreate, 3000)) {
+          await Participant.bulkCreate(c, { transaction: t, logging: false, validate: true });
           created += c.length;
         }
       }
 
-      // Bulk UPDATE by primary key
-      if (updates.length) {
-        for (const u of chunkArray(updates, 3000)) {
+      if (toUpsert.length) {
+        for (const u of chunkArray(toUpsert, 3000)) {
           await Participant.bulkCreate(u, {
-            updateOnDuplicate: UPDATE_FIELDS,
+            updateOnDuplicate: UPSERT_FIELDS, // ON CONFLICT uses unique indexes (salesforce_id)
             transaction: t,
             logging: false,
-            validate: false,
+            validate: true,
+            // hooks aren’t needed; we set sendToSalesforce=false above
           });
           updated += u.length;
         }
@@ -342,6 +310,7 @@ export async function upsertParticipantsSmart(rows) {
 
   return { created, updated, reassignments };
 }
+
 
 /* --------------------------------- service -------------------------------- */
 
