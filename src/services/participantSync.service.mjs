@@ -94,7 +94,7 @@ function mapSfParticipantToPg(
         row.Household__r.Number_of_Coffee_Plots__c === null
         ? row.Number_of_Coffee_Plots__c
         : row.Household__r.Number_of_Coffee_Plots__c
-      : "ERROR HERE! Please report to the PIMA team",
+      : null,
 
     // watermark + push flag
     lastModifiedDate: new Date(row.LastModifiedDate),

@@ -134,13 +134,13 @@ function formatHouseholds(header, rows) {
     }
 
     // check if same household have different salesforce Ids
-    if (primary && secondary && primary.Household__c !== secondary.Household__c) {
-      errors.push({
-        row: "-",
-        msg: `Household ${key} has conflicting Salesforce Ids`,
-      });
-      continue;
-    }
+    // if (primary && secondary && primary.Household__c !== secondary.Household__c) {
+    //   errors.push({
+    //     row: "-",
+    //     msg: `Household ${key} has conflicting Salesforce Ids`,
+    //   });
+    //   continue;
+    // }
 
     const m = primary || secondary; // carry core fields from any row
     households.push({
@@ -158,7 +158,7 @@ function formatHouseholds(header, rows) {
   return { households, errors };
 }
 
-function mapParticipants(header, rows, tgByFfgId) {
+function mapParticipants(header, rows, tgByFfgId, existingHHMap) {
   const idx = (name) => header.indexOf(name);
   const I = {
     name: idx("Name"),
@@ -197,7 +197,7 @@ function mapParticipants(header, rows, tgByFfgId) {
       primaryHouseholdMember,
       ffgId: ffg_id,
       trainingGroup: tgId,
-      householdId: r[I.hh] || null, // may be null for “new” HH create
+      householdId: existingHHMap.get(hhComposite(ffg_id, hhNumber))?.Id || null,
       hhNumber: r[I.hhnum] || null,
       status: r[I.status] || "Active",
       otherIdNumber: r[I.otherId] || null,
@@ -346,23 +346,25 @@ export const StagedUploadService = {
     const tgByFfgId = new Map(tgLookup.records.map((r) => [r.TNS_Id__c, r.Id]));
 
     // 4) Stage Household upserts (avoid staging unchanged updates if we have Id)
-    const existingIds = households.map((h) => h.Household__c).filter(Boolean);
+    const existingIds = households
+      .map((h) => h.Household_ID__c)
+      .filter(Boolean);
     const existingMap = new Map();
     if (existingIds.length) {
       for (let i = 0; i < existingIds.length; i += 500) {
         const batch = existingIds.slice(i, i + 500);
         const res = await sf_conn.query(
           `SELECT Id, Name, Training_Group__c, Number_of_Members__c, Farm_Size__c, Number_of_Coffee_Plots__c, Household_ID__c
-           FROM Household__c WHERE Id IN ('${batch.join("','")}')`
+           FROM Household__c WHERE Household_ID__c IN ('${batch.join("','")}')`
         );
-        res.records.forEach((r) => existingMap.set(r.Id, r));
+        res.records.forEach((r) => existingMap.set(r.Household_ID__c, r));
       }
     }
 
     const hhPayloads = households
       .filter((h) => {
         if (!h.Household__c) return true; // new create by composite
-        const sf = existingMap.get(h.Household__c);
+        const sf = existingMap.get(h.Household_ID__c);
         if (!sf) return true;
         // same compare as didHouseholdValuesChange
         const farm = h.Farm_Size__c ?? null;
@@ -418,7 +420,12 @@ export const StagedUploadService = {
     }
 
     // 5) Build participants
-    const participantsParsed = mapParticipants(header, rows, tgByFfgId);
+    const participantsParsed = mapParticipants(
+      header,
+      rows,
+      tgByFfgId,
+      existingMap
+    );
 
     let stagedParticipants = 0;
     for (const p of participantsParsed) {

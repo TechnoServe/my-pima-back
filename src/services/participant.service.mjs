@@ -58,8 +58,16 @@ function mapRowToDto(p) {
 export const ParticipantsService = {
   async getParticipantsByProject(projectId) {
     try {
+
+      // filter only active for all projects except "a0EOj000003TZQTMA4" don't filter by status
+      let whereClause = { projectId };
+
+      if (projectId !== "a0EOj000003TZQTMA4") {
+        whereClause.status = "Active";
+      }
+
       const rows = await Participant.findAll({
-        where: { projectId },
+        where: whereClause,
         order: [
           ["tns_id", "ASC"],
           ["hh_number", "ASC"],

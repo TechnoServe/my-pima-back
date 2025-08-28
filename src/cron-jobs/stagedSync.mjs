@@ -39,7 +39,6 @@ async function markRun(runId, patch) {
   await UploadRun.update(patch, { where: { id: runId } });
 }
 
-
 function sanitizeSObjectPayload(payload) {
   const out = {};
   for (const [k, v] of Object.entries(payload || {})) {
@@ -72,6 +71,7 @@ async function aggregateAll(projectId) {
     countsFor(AttendanceOutbox, projectId),
   ]);
   const sum = (k) => hh[k] + parts[k] + att[k];
+  console.log("aggregateAll", projectId, hh, parts, att);
   return {
     byQueue: { households: hh, participants: parts, attendance: att },
     totals: {
@@ -128,6 +128,7 @@ function chunk(arr, size) {
 
 /** status setter after push */
 async function finishRows(model, successRows, errorRows) {
+  console.log("finishRows", successRows, errorRows);
   if (successRows.length) {
     await model.update(
       { status: "sent", lastError: null, updatedAt: now() },
@@ -168,9 +169,43 @@ async function pushHouseholdChunk(sf_conn, rows) {
   // split into create / update
   const createPayload = [];
   const updatePayload = [];
+
+  const hhIdsToResolve = new Set();
+
+  // first resolve Household ids by composite id
+  for (const r of rows) {
+    hhIdsToResolve.add(r.householdComposite);
+  }
+
+  // Resolve existing Household__c by Household_ID__c
+  const existingMap = new Map();
+  if (hhIdsToResolve.size > 0) {
+    const existingIds = Array.from(hhIdsToResolve);
+    for (let i = 0; i < existingIds.length; i += 500) {
+      const batch = existingIds.slice(i, i + 500);
+      const res = await sf_conn.query(
+        `SELECT Id, Household_ID__c FROM Household__c WHERE Household_ID__c IN ('${batch.join(
+          "','"
+        )}')`
+      );
+      res.records.forEach((r) => existingMap.set(r.Household_ID__c, r));
+    }
+  }
+
+  console.log("Existing household map:", existingMap);
+
   rows.forEach((r) => {
+    console.log("Processing household: ", r.payload);
     const p = sanitizeSObjectPayload(r.payload || {});
-    if (p.Id) updatePayload.push({ ...p, __rowId: r.id });
+    // if in existingMap push to update; else create
+    console.log("Household composite: ", r.householdComposite);
+    console.log("Existing map has it? ", existingMap.has(r.householdComposite));
+    if (existingMap.has(r.householdComposite))
+      updatePayload.push({
+        ...p,
+        __rowId: r.id,
+        Id: existingMap.get(r.householdComposite).Id,
+      });
     else createPayload.push({ ...p, __rowId: r.id });
   });
 
@@ -186,12 +221,23 @@ async function pushHouseholdChunk(sf_conn, rows) {
   };
 
   // Attach row id for mapping back
-  createPayload.forEach((p, i) => {
-    p.__rowId = rows.filter((r) => !r.payload?.Id)[i].id;
-  });
-  updatePayload.forEach((p, i) => {
-    p.__rowId = rows.filter((r) => r.payload?.Id)[i].id;
-  });
+  // createPayload.forEach((p, i) => {
+  //   // add __rowId where r.householdComposite not in existingMap
+  //   console.log("Creating household: ", p);
+  //   console.log("Household composite: ", rows[i]);
+  //   if (!existingMap.has(rows[i].householdComposite)) {
+  //     p.__rowId = rows[i].id;
+  //   }
+  // });
+  // updatePayload.forEach((p, i) => {
+  //   // add __rowId where r.householdComposite in existingMap
+  //   if (existingMap.has(rows[i].householdComposite)) {
+  //     p.__rowId = rows[i].id;
+  //   }P
+  // });
+
+  console.log("Household create payload:", createPayload);
+  console.log("Household update payload:", updatePayload);
 
   try {
     if (createPayload.length) {
@@ -199,15 +245,18 @@ async function pushHouseholdChunk(sf_conn, rows) {
         .sobject("Household__c")
         .create(createPayload.map(({ __rowId, ...rest }) => rest));
       handleResult(createPayload, results);
+      console.log("create results", results);
     }
     if (updatePayload.length) {
       const results = await sf_conn
         .sobject("Household__c")
         .update(updatePayload.map(({ __rowId, ...rest }) => rest));
       handleResult(updatePayload, results);
+      console.log("update results", results);
     }
   } catch (e) {
     // Entire chunk failed → mark all as failed with same message
+    console.log("Household chunk failed", e);
     rows.forEach((r) => failures.set(r.id, e?.message || String(e)));
   }
 
@@ -218,6 +267,7 @@ async function pushHouseholdChunk(sf_conn, rows) {
 async function pushParticipantChunk(sf_conn, rows) {
   const createPayload = [];
   const updatePayload = [];
+  const hhIdsToResolve = new Set();
 
   rows.forEach((r) => {
     // add flags, then sanitize to remove __resolverHints
@@ -227,10 +277,20 @@ async function pushParticipantChunk(sf_conn, rows) {
       Create_In_CommCare__c: false,
       Check_Status__c: true,
     };
-    const p = sanitizeSObjectPayload(withFlags);
+    // for each r.payload, check if Household__c is null; if so, add __resolverHints.householdComposite to hhIdsToResolve
+    if (
+      r.payload?.Household__c === null &&
+      r.payload?.__resolverHints?.householdComposite
+    ) {
+      console.log(
+        "resolving participant without a household id: ",
+        r.payload.__resolverHints.householdComposite
+      );
+      hhIdsToResolve.add(r.payload.__resolverHints.householdComposite);
+    }
 
-    if (p.Id) updatePayload.push({ ...p, __rowId: r.id });
-    else createPayload.push({ ...p, __rowId: r.id });
+    if (withFlags.Id) updatePayload.push({ ...withFlags, __rowId: r.id });
+    else createPayload.push({ ...withFlags, __rowId: r.id });
   });
 
   const successes = new Set();
@@ -244,20 +304,41 @@ async function pushParticipantChunk(sf_conn, rows) {
     });
   };
 
-  createPayload.forEach((p, i) => {
-    p.__rowId = rows.filter((r) => !r.payload?.Id)[i].id;
+  // Resolve Household__c for those needing it
+  const existingMap = new Map();
+  if (hhIdsToResolve.size > 0) {
+    const existingIds = Array.from(hhIdsToResolve);
+    for (let i = 0; i < existingIds.length; i += 500) {
+      const batch = existingIds.slice(i, i + 500);
+      const res = await sf_conn.query(
+        `SELECT Id, Household_ID__c FROM Household__c WHERE Household_ID__c IN ('${batch.join(
+          "','"
+        )}')`
+      );
+      res.records.forEach((r) => existingMap.set(r.Household_ID__c, r));
+    }
+  }
+
+  console.log("Existing household map:", existingMap);
+
+  // Attach id to updatePayload for records with Household__c null
+  updatePayload.forEach((p) => {
+    if (!p.Household__c) {
+      console.log("resolving update participant without a household id: ", p);
+      p.Household__c =
+        existingMap.get(p.__resolverHints?.householdComposite)?.Id || null;
+    }
   });
+
+  updatePayload.forEach((p, i) => {
+    updatePayload[i] = sanitizeSObjectPayload(p);
+  });
+
   updatePayload.forEach((p, i) => {
     p.__rowId = rows.filter((r) => r.payload?.Id)[i].id;
   });
 
   try {
-    if (createPayload.length) {
-      const results = await sf_conn
-        .sobject("Participant__c")
-        .create(createPayload.map(({ __rowId, ...rest }) => rest));
-      handleResult(createPayload, results);
-    }
     if (updatePayload.length) {
       const results = await sf_conn
         .sobject("Participant__c")
@@ -334,7 +415,7 @@ async function pushAttendanceChunk(sf_conn, rows) {
         Training_Session__c: sessionId,
       };
 
-      const payload = sanitizeSObjectPayload(raw); 
+      const payload = sanitizeSObjectPayload(raw);
       // If has Id → update; else create
       if (payload.Id) records.push(payload);
       else records.push(payload); // create path; same structure
@@ -474,7 +555,7 @@ export async function runSequentialOutboxPush(
 
   // Post-push participant refresh
   try {
-    await ParticipantSyncService.syncIncremental(sf_conn, projectId);
+    await ParticipantSyncService.fullRefresh(sf_conn, projectId);
     console.log(`[${projectId}] Participant incremental sync done.`);
   } catch (e) {
     console.error(
@@ -510,6 +591,8 @@ export async function runSequentialOutboxPush(
   const anyActive = totals.pending + totals.processing > 0;
   const anyErrors = totals.failed + totals.dead > 0;
   const finalStatus = !anyActive && !anyErrors ? "completed" : "running";
+
+  console.log("final resolver status", finalStatus);
 
   await markRun(resolvedRunId, {
     status: finalStatus,

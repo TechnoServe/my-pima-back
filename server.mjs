@@ -66,7 +66,7 @@ import { listJobs } from "./src/utils/syncProgress.mjs";
 import {
   runOutboxForProject,
   runPartSyncCrons,
-  runSequentialOutboxPush
+  runSequentialOutboxPush,
 } from "./src/cron-jobs/stagedSync.mjs";
 
 const app = express();
@@ -359,7 +359,9 @@ app.get("/api/sync/participantsToSalesforce", async (req, res) => {
     });
 
     projects.forEach(async (p) => {
-      console.log(`Pushing participants for project to salesforce ${p.sf_project_id}`);
+      console.log(
+        `Pushing participants for project to salesforce ${p.sf_project_id}`
+      );
       await runOutboxForProject(p.sf_project_id, conn);
       console.log(`✅ Participants pushed for project ${p.sf_project_id}`);
     });
@@ -374,9 +376,9 @@ app.get("/api/sync/participantsToSalesforce", async (req, res) => {
   }
 });
 
-app.post("/api/outbox/retry", async (_req, res) => {
+app.get("/api/outbox/retry", async (_req, res) => {
   try {
-    const statuses = ["failed"];
+    const statuses = ["failed", "processing"];
     const QUEUE = {
       households: HouseholdOutbox,
       participants: ParticipantOutbox,
@@ -411,10 +413,10 @@ app.post("/api/outbox/retry", async (_req, res) => {
     // Kick the sequential pusher per affected project.
     for (const projectId of projects) {
       // Reuse an active run if one exists; otherwise create a new one.
-      // const existingRun = await UploadRun.findOne({
-      //   where: { projectId, status: "running" },
-      //   order: [["createdAt", "DESC"]],
-      // });
+      const existingRun = await UploadRun.findOne({
+        where: { projectId, status: "running" },
+        order: [["createdAt", "DESC"]],
+      });
 
       // const run =
       //   existingRun ||
@@ -425,8 +427,8 @@ app.post("/api/outbox/retry", async (_req, res) => {
       //   }));
 
       // Fire-and-forget; progress is reported by your existing progress API
-      runSequentialOutboxPush(projectId, sf_conn, { runId: run.id }).catch(
-        (e) => console.error(`[manual-retry] runner error ${projectId}:`, e)
+      runSequentialOutboxPush(projectId, conn, existingRun.Id).catch((e) =>
+        console.error(`[manual-retry] runner error ${projectId}:`, e)
       );
     }
 
@@ -436,7 +438,6 @@ app.post("/api/outbox/retry", async (_req, res) => {
     res.status(500).json({ error: "Retry failed." });
   }
 });
-
 
 // server.mjs (add near your other imports)
 import { Op } from "sequelize";
@@ -582,6 +583,14 @@ app.get("/api/outbox/progress/:projectId", async (req, res) => {
       households.leftToSend + participants.leftToSend + attendance.leftToSend;
     const percent = total ? Math.round((sent / total) * 100) : 0;
 
+    // if all run phases are done, mark run as finished (if not already)
+    if (run  && leftToSend === 0) {
+      await run.update({
+        status: failed ? "failed" : "completed",
+        finishedAt: new Date(),
+      });
+    }
+
     // failed rows (current run only, if available)
     const [hhFailed, prtFailed, attFailed] = await Promise.all([
       failedRowsFor(HouseholdOutbox, hhWhere, "household"),
@@ -589,8 +598,9 @@ app.get("/api/outbox/progress/:projectId", async (req, res) => {
       failedRowsFor(AttendanceOutbox, attWhere, "attendance"),
     ]);
 
-
-    const isSyncing = run ? run.status === "running" || run.status === "pending" : false;
+    const isSyncing = run
+      ? run.status === "running" || run.status === "pending"
+      : false;
 
     return res.json({
       status: 200,
