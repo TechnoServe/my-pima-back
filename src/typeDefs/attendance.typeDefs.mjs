@@ -13,6 +13,57 @@ const AttendanceTypeDefs = gql`
     module_id: String!
   }
 
+  type AttendanceEvidence {
+    attendanceId: ID
+    trainingDate: String
+    moduleName: String
+    currentPreviousModule: String
+    attended: Boolean
+  }
+
+  type AttendanceSide {
+    countAttended: Int
+    anyAttended: Boolean
+    attendedPreviousModule: Boolean
+    evidence: [AttendanceEvidence!]!
+  }
+
+  type CheckSide {
+    recordId: ID
+    numberOfTrainingsAttended: Int
+    attendedAnyTrainings: Boolean
+    attendedLastMonthsTraining: Boolean
+  }
+
+  type AttendanceComparisonMatches {
+    countEqual: Boolean
+    anyEqual: Boolean
+    previousModuleEqual: Boolean
+  }
+
+  type AttendanceComparisonItem {
+    participantId: ID!
+    tnsId: String
+    firstName: String
+    lastName: String
+    trainingGroupName: String
+    check: CheckSide
+    attendance: AttendanceSide
+    matches: AttendanceComparisonMatches
+  }
+
+  type AttendanceComparisonTotals {
+    total: Int!
+    matches: Int!
+    mismatches: Int!
+  }
+
+  type AttendanceComparisonResponse {
+    status: Int!
+    totals: AttendanceComparisonTotals!
+    items: [AttendanceComparisonItem!]!
+  }
+
   type Query {
     getAttendances(project_id: String!): AllAttendanceResponse
     getAttendanceByParticipant(participant_id: String!): AllAttendanceResponse
@@ -20,6 +71,12 @@ const AttendanceTypeDefs = gql`
     getAttendanceStatisticsBySession(
       session_id: String!
     ): AttendanceStatisticsResponse
+    getAttendanceCheckComparison(
+      projectId: ID!
+      search: String
+      tgIds: [ID!]
+      onlyMismatches: Boolean
+    ): AttendanceComparisonResponse!
   }
 
   type AllAttendanceResponse {

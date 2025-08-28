@@ -1,12 +1,12 @@
 import Projects from "../models/projects.models.mjs";
 import { AttendanceService } from "../services/attendance.service.mjs";
+import { getAttendanceCheckComparison } from "../services/attendanceCheck.service.mjs";
 import { AttendanceSyncService } from "../services/attendanceSync.service.mjs";
 
 const AttendanceResolvers = {
   Query: {
     getAttendances: async (_, { project_id }, { sf_conn }) => {
       try {
-
         const project = await Projects.findOne({
           where: { sf_project_id: project_id, attendance_full: true },
         });
@@ -182,6 +182,39 @@ const AttendanceResolvers = {
           status: error.status,
         };
       }
+    },
+
+    async getAttendanceCheckComparison(_, args, {sf_conn}) {
+
+      const items = await getAttendanceCheckComparison(sf_conn, args);
+
+      const totals = items.reduce(
+        (acc, it) => {
+          const allMatch =
+            Boolean(it.matches?.countEqual) &&
+            Boolean(it.matches?.anyEqual) &&
+            Boolean(it.matches?.previousModuleEqual);
+          acc.total += 1;
+          if (allMatch) acc.matches += 1;
+          else acc.mismatches += 1;
+          return acc;
+        },
+        { total: 0, matches: 0, mismatches: 0 }
+      );
+
+      let filtered = items;
+      if (args.onlyMismatches) {
+        filtered = items.filter(
+          (it) =>
+            !(
+              it.matches?.countEqual &&
+              it.matches?.anyEqual &&
+              it.matches?.previousModuleEqual
+            )
+        );
+      }
+
+      return { status: 200, totals, items: filtered };
     },
   },
 };
