@@ -33,11 +33,13 @@ const AttendanceTypeDefs = gql`
     numberOfTrainingsAttended: Int
     attendedAnyTrainings: Boolean
     attendedLastMonthsTraining: Boolean
+    farmVisit: Boolean!      # NEW
+    observation: Boolean!    # NEW
   }
 
   type AttendanceComparisonMatches {
-    countEqual: Boolean
-    anyEqual: Boolean
+    countEqual: Boolean                  # May be null if not applicable
+    anyEqual: Boolean                    # May be null if not applicable
     previousModuleEqual: Boolean
   }
 

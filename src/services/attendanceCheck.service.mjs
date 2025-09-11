@@ -10,6 +10,9 @@ const FIELDS = {
   CHECK: [
     "Id",
     "Participant__c",
+    "Farm_Visit__c",
+    "Observation__c",
+    "Training_Session__r.Training_Module__r.Module_Number__c",
     "Number_of_Trainings_Attended__c",
     "Attended_Any_Trainings__c",
     "Attended_Last_Months_Training__c",
@@ -30,6 +33,7 @@ const FIELDS = {
     "Training_Session__r.Date__c",
     "Training_Session__r.Training_Module__r.Module_Title__c",
     "Training_Session__r.Training_Module__r.Current_Previous_Module__c",
+    "Training_Session__r.Training_Module__r.Module_Number__c",
   ],
 };
 
@@ -115,17 +119,35 @@ export async function getAttendanceCheckComparison(conn, args) {
 
     const countAttended = attended.length;
     const anyAttended = countAttended > 0;
-    const attendedPreviousModule = attended.some(
-      (a) =>
-        a?.Training_Session__r?.Training_Module__r
-          ?.Current_Previous_Module__c === PREV
+
+    // NEW: previous-module logic based on module number at the time of Check
+    const chkModuleNum = Number(
+      chk?.Training_Session__r?.Training_Module__r?.Module_Number__c
     );
+    let attendedPreviousModule = false;
+    if (Number.isFinite(chkModuleNum)) {
+      const prevModuleNum = chkModuleNum - 1;
+      if (prevModuleNum >= 1) {
+        attendedPreviousModule = attended.some((a) => {
+          const m = Number(
+            a?.Training_Session__r?.Training_Module__r?.Module_Number__c
+          );
+          return Number.isFinite(m) && m === prevModuleNum;
+        });
+      } else {
+        attendedPreviousModule = false;
+      }
+    } else {
+      // If we don't know the module number on the check, treat as false
+      attendedPreviousModule = false;
+    }
 
     // Evidence: show BOTH attended and absent (limited)
-    const evidence = all.map((a) => ({
+    const evidence = all.slice(0, EVIDENCE_LIMIT).map((a) => ({
       attendanceId: a.Id,
       trainingDate: a?.Training_Session__r?.Date__c || null,
-      moduleName: a?.Training_Session__r?.Training_Module__r?.Module_Title__c || null,
+      moduleName:
+        a?.Training_Session__r?.Training_Module__r?.Module_Title__c || null,
       currentPreviousModule:
         a?.Training_Session__r?.Training_Module__r?.Current_Previous_Module__c ||
         null,
@@ -137,11 +159,31 @@ export async function getAttendanceCheckComparison(conn, args) {
     const chkAny = normBool(chk.Attended_Any_Trainings__c);
     const chkPrev = normBool(chk.Attended_Last_Months_Training__c);
 
-    const matches = {
-      countEqual: chkCount === countAttended,
-      anyEqual: chkAny === anyAttended,
-      previousModuleEqual: chkPrev === attendedPreviousModule,
-    };
+    // NEW: presence flags derived from Id existence (returned on check)
+    const hasFarmVisit = !!chk.Farm_Visit__c;
+    const hasObservation = !!chk.Observation__c;
+
+    // NEW: matching rules
+    let matches;
+    if (hasFarmVisit) {
+      // Compare only any & previous; do not include countEqual here
+      matches = {
+        anyEqual: chkAny === anyAttended,
+        previousModuleEqual: chkPrev === attendedPreviousModule,
+      };
+    } else if (hasObservation && !hasFarmVisit) {
+      // Compare only previous
+      matches = {
+        previousModuleEqual: chkPrev === attendedPreviousModule,
+      };
+    } else {
+      // Neither present: compare all three
+      matches = {
+        countEqual: chkCount === countAttended,
+        anyEqual: chkAny === anyAttended,
+        previousModuleEqual: chkPrev === attendedPreviousModule,
+      };
+    }
 
     items.push({
       participantId: pid,
@@ -154,6 +196,8 @@ export async function getAttendanceCheckComparison(conn, args) {
         numberOfTrainingsAttended: chkCount,
         attendedAnyTrainings: chkAny,
         attendedLastMonthsTraining: chkPrev,
+        observation: hasObservation, // boolean as requested
+        farmVisit: hasFarmVisit,     // boolean as requested
       },
       attendance: {
         countAttended,
