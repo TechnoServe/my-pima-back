@@ -660,7 +660,7 @@ app.get("/image/:formId/:attachmentId", async (req, res) => {
     // Fetch the image from CommCare API
     const response = await axios.get(commcareApiUrl, {
       headers: {
-        Authorization: `ApiKey ymugenga@tns.org:46fa5358cd802aabcc5c3b14a194464d40c564e6`,
+        Authorization: `ApiKey ymugenga@tns.org:62d6df083843608fcc1cf6a0742d31e15d237111`,
       },
       responseType: "arraybuffer", // Handle binary data (e.g., images)
     });
