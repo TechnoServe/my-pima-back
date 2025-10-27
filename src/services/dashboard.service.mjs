@@ -443,7 +443,6 @@ export async function getTrainingAttendanceByTopic(wetmillId) {
     if (r.question_name === "training_topic") {
       perResp[id].topic = r.value_text;
     } else if (r.question_name === "male_attendance") {
-      console.log("Male Attendance Row:", r);
       // attendance count might be in value_number or value_text
       if (r.field_type !== "boolean") {
         perResp[id].male += Number(r.value_number ?? r.value_text) || 0;
@@ -457,8 +456,6 @@ export async function getTrainingAttendanceByTopic(wetmillId) {
         perResp[id].female += 1;
       }
     }
-
-    console.log("Per Resp Map:" + id, perResp[id]);
   });
 
   // 4) aggregate across responses by topic:
